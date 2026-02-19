@@ -19,11 +19,11 @@ Alternatively
  
 ## Root actions
 in root.rule
-create Certificate Request using openssl
-Receive server  certificate from Cert Authority and upload to bucket
-download customer server certificate from bucket
-create user pythian
-download nginx executable from <bucket>
-download grafana executable from <bucket>
+- create Certificate Request using openssl
+- Receive server  certificate from Cert Authority and upload to bucket
+- download customer server certificate from bucket
+- create user pythian
+- download nginx executable from <bucket>
+- download grafana executable from <bucket>
 
 
