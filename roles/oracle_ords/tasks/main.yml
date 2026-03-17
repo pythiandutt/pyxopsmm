@@ -1,0 +1,19 @@
+---
+- name: Install ORDS software
+  import_tasks: ords_software.yml
+
+- name: Install ORDS into PDB
+  import_tasks: ords_install.yml
+
+- name: Set ORDS user properties
+  include_tasks: "{{ include_task_file }}"
+  loop:
+    - "{{ playbook_dir }}/roles/common/tasks/ora_db_user.yml"
+    - "{{ playbook_dir }}/roles/common/tasks/ora_db_user_property.yml"
+  loop_control:
+    loop_var: include_task_file
+  vars:
+    passed_list: "{{ ords_db_users | default([]) | unique }}"
+
+- name: Update Tomcat
+  import_tasks: update_tomcat.yml

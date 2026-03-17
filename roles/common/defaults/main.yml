@@ -1,0 +1,45 @@
+---
+site_prefix: "sdbs"
+
+oracle_db_release: 26ai
+oracle_db_version: 23.26.1
+oracle_base: /opt/oracle
+oracle_home: "{{ oracle_base }}/product/{{ oracle_db_release }}/dbhomeFree"
+oracle_sid: FREE
+oracle_listener_port: 1521
+tablespace_type: BIGFILE
+default_date_format: 'DD-MON-YYYY'
+oracle_install_group: oinstall
+
+ords_config_dir: /etc/ords/config
+apex_tbsp: APEX
+temp_tbsp: TEMP
+
+apex_unzip_base: /home/{{ oracle_user }}
+apex_profile: "{{ site_prefix }}_apex_service_accounts"
+apex_images_location: /i/
+# apex_images_location: https://static.oracle.com/cdn/apex/24.2.14/
+
+webserver_user: tomcat
+webserver_group: tomcat
+webserver_base: /opt
+webserver_home: "{{ webserver_base }}/tomcat"
+webserver_document_root: /var/www/html
+webserver_https_port: 8443
+webserver_restart_delay: 5
+
+dnf_lock_timeout: 180
+reboot_timeout: 180
+run_reboot_handler: false
+
+server_timezone: America/Edmonton
+smtp_port: 25
+smtp_server: relay.domain.com
+smtp_sender_domain: domain.com
+smtp_recipient_domain: domain.com
+smtp_sender_db: "{{ ansible_hostname }}-DB"
+smtp_sender_apex: "{{ ansible_hostname }}-APEX"
+
+main_user_email: "{{ main_user }}@{{ smtp_recipient_domain }}"
+notification_user_email: pane@pythian.com
+send_notification_email: false

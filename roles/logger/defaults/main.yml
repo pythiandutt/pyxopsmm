@@ -1,0 +1,25 @@
+---
+schema_name: PLSQL_LOGGER
+
+software_version: "3.1.1"
+
+ora_db_users:
+  - { user_name: "{{ schema_name }}" , profile_name: '' , default_tbsp: "{{ site_prefix }}_utilities" , temp_tbsp: '' , status: '' , auth_type: "NO AUTHENTICATION" , state: present }
+
+ora_db_quotas:
+  - { user_name: "{{ schema_name }}" , tbsp_quota: 104857600 , tbsp_name: "{{ site_prefix }}_utilities" }
+
+ora_db_role_privs:
+  - { role_name: connect , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+
+ora_db_system_privs:
+  - { sys_priv: "CREATE ANY CONTEXT" , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE JOB"         , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE PROCEDURE"   , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE SEQUENCE"    , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE TABLE"       , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE TRIGGER"     , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE VIEW"        , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+
+ora_db_proxy_privs:
+  - { proxy_name: "{{ main_user }}" , proxy_client: "{{ schema_name }}" , proxy_options: "" , state: present }

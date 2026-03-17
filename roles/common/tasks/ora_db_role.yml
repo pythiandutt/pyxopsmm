@@ -1,0 +1,62 @@
+---
+- name: Check Oracle Database role existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_roles
+     WHERE role = '{{ item.role_name }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_oracle_roles
+  loop: "{{ passed_list }}"
+
+- name: Add Oracle Database role
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    CREATE ROLE {{ item.role.role_name }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.role.state | lower == "present"
+    - not item.role_found | bool
+  loop: "{{ check_oracle_roles | json_query('results[*].{role:item,role_found:stdout}') }}"
+
+- name: Remove Oracle Database role
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    DROP ROLE {{ item.role.role_name }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.role.state | lower == "absent"
+    - item.role_found | bool
+  loop: "{{ check_oracle_roles | json_query('results[*].{role:item,role_found:stdout}') }}"

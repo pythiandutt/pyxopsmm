@@ -1,0 +1,15 @@
+---
+- name: Download and stage the APEX software
+  unarchive:
+    src: "{{ apex_uri }}"
+    dest: "{{ apex_unzip_base }}"
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_install_group }}"
+    mode: "u=rwx,go="
+    remote_src: true
+    creates: "{{ apex_unzip_base }}/apex/apexins.sql"
+
+- name: Remove META-INF folder
+  file:
+    path: "{{ apex_unzip_base }}/META-INF"
+    state: absent

@@ -1,0 +1,2 @@
+alias pdb-apex="export ORACLE_PDB_SID=APEX"
+alias pdb-clear="unset ORACLE_PDB_SID"

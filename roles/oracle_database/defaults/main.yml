@@ -1,0 +1,14 @@
+---
+db_systemd_service: "oracle-free-{{ oracle_db_release }}.service"
+db_character_set: AL32UTF8
+db_nls_character_set: AL16UTF16
+db_init_params: sga_target=1600M,pga_aggregate_target=400M,streams_pool_size=64M,use_large_pages=AUTO_ONLY,filesystemio_options=SETALL,db_index_compression_inheritance=ALL
+db_data_file_dest: "{{ oracle_base }}/oradata"
+db_archive_mode: false
+db_recovery_dest: "{{ oracle_base }}/fast_recovery_area"
+db_recovery_size: 12288
+db_redo_log_size: 100
+
+log_days_to_keep: 15
+log_size_before_rotate: 10M
+log_dirs: "{{ oracle_base }}/diag/rdbms/*/*/trace/*.log {{ oracle_base }}/diag/tnslsnr/*/listener/trace/*.log"

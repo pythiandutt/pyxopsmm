@@ -1,0 +1,80 @@
+---
+- name: Check workspace schema existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    exec APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(p_workspace=>'{{ item.workspace_name }}'));
+    SELECT NVL(MAX(true),false)
+      FROM apex_workspace_schemas
+     WHERE workspace_name = '{{ item.workspace_name }}' COLLATE binary_ci
+       AND schema = '{{ item.schema_name }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_workspace_schemas
+  loop: "{{ passed_list }}"
+
+- name: Add workspace schema
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(p_workspace=>'{{ item.wksp.workspace_name }}'));
+       APEX_INSTANCE_ADMIN.add_schema(
+          p_workspace => '{{ item.wksp.workspace_name }}',
+          p_schema => '{{ item.wksp.schema_name }}'
+       );
+       commit;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.wksp.state | lower == "present"
+    - item.schema_found is search("FALSE")
+  loop: "{{ check_workspace_schemas | json_query('results[*].{wksp:item,schema_found:stdout}') }}"
+
+- name: Remove workspace schema
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(p_workspace=>'{{ item.wksp.workspace_name }}'));
+       APEX_INSTANCE_ADMIN.remove_schema(
+          p_workspace => '{{ item.wksp.workspace_name }}',
+          p_schema => '{{ item.wksp.schema_name }}'
+       );
+       commit;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.wksp.state | lower == "absent"
+    - item.schema_found is search("TRUE")
+  loop: "{{ check_workspace_schemas | json_query('results[*].{wksp:item,schema_found:stdout}') }}"

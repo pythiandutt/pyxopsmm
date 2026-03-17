@@ -1,0 +1,71 @@
+---
+- name: Additional groups to the Tomcat OS user
+  user:
+    name: "{{ webserver_user }}"
+    groups: "{{ oracle_install_group }}"
+    append: true
+
+- name: Capture numeric APEX version from database
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT REPLACE(SUBSTR(version_no,1,4),'.') FROM apex_release;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: apex_version_database
+  when: apex_images_location == "/i/"
+
+- name: Capture numeric APEX images version from webserver
+  shell: set -o pipefail; cut -d':' -f2 "{{ webserver_document_root }}/i/apex_version.txt" | sed -E 's/(\ |\.)//g'
+  changed_when: false
+  failed_when: false
+  register: apex_version_images
+  when: apex_images_location == "/i/"
+
+- name: Copy APEX images to the webserver document root
+  copy:
+    src: "{{ apex_unzip_base }}/apex/images/"
+    dest: "{{ webserver_document_root }}/i/"
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    mode: "u=rx,go="
+    force: true
+    remote_src: true
+  when:
+    - apex_images_location == "/i/"
+    - apex_version_images.stdout | default(0) < apex_version_database.stdout
+  notify: restart_tomcat
+
+- name: Copy WAR file
+  copy:
+    src: "{{ oracle_base }}/ords/ords.war"
+    dest: "{{ webserver_home }}/webapps"
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    mode: "u=rx,go="
+    force: true
+    remote_src: true
+  notify: restart_tomcat
+
+- name: Restart Tomcat to create webapp from WAR file (needed for next step)
+  meta: flush_handlers
+
+- name: Update the ORDS web app configuration to redirect non-SSL connections to SSL
+  copy:
+    src: "web.xml"
+    dest: "{{ webserver_home }}/webapps/ords/WEB-INF/web.xml"
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    mode: "u=rw,go="
+    force: true
+  notify: restart_tomcat

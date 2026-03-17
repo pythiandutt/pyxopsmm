@@ -1,0 +1,55 @@
+---
+- name: Install prerequisite packages for NGINX
+  dnf:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ nginx_prereq_pkgs }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Create log directory
+  file:
+    path: "{{ log_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Configure ssl
+  include_tasks: configure_ssl.yml
+
+- name: Install NGINX using DNF
+  dnf:
+    name: nginx
+    state: present
+
+- name: Render nginx configuration file
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure NGINX service is started and enabled
+  systemd:
+    name: nginx
+    state: started
+    enabled: yes
+
+- name: Open port {{ nginx_port }} in the firewall
+  firewalld:
+    port: "{{ nginx_port }}/tcp"
+    permanent: yes
+    state: enabled
+
+# - name: Reload firewalld to apply rules
+#   systemd:
+#     name: firewalld
+#     state: reloaded
+
+- name: Setup logrotate for nginx
+  template:
+    dest: "/etc/logrotate.d/nginx"
+    src: "logrotate_nginx.j2"
+    owner: "root"
+    group: "root"
+    mode: "u=rw,go=r"

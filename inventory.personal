@@ -1,0 +1,9 @@
+#  Environment:
+[prod:children]
+apex_group
+
+#  Role groups:
+[apex_group]
+ol8-ora23aiFree-MBP main_user=spane ansible_host=localhost ansible_port=2223 ansible_user=simon
+
+[reporting_group]

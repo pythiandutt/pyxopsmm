@@ -1,0 +1,11 @@
+# Prometheus Proxy configuration file by Ansible
+location /prometheus {
+        proxy_pass http://localhost:9090/prometheus/;
+        proxy_set_header Accept-Encoding "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        rewrite ^/prometheus/?$ /prometheus/graph redirect;
+        rewrite ^/prometheus/(.*)$ /$1 break;
+}

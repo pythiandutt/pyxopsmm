@@ -1,0 +1,95 @@
+---
+- name: Gather installed RPM package facts
+  package_facts:
+    manager: rpm
+
+- name: (RHEL) Install the Oracle Database preinstall RPM
+  dnf:
+    name: "{{ oracle_db_preinstall_package_uri }}"
+    state: present
+    disable_gpg_check: "{{ skip_gpg_check }}"
+    lock_timeout: "{{ dnf_lock_timeout }}"
+  register: preinstall_rpm
+  when:
+    - ansible_distribution in ["RedHat", "Rocky"]
+    - oracle_db_preinstall_package not in ansible_facts.packages
+
+- name: Install Oracle {{ oracle_db_release }} Free software
+  dnf:
+    name: "{{ oracle_db_free_package_uri }}"
+    state: present
+    disable_gpg_check: "{{ skip_gpg_check }}"
+    lock_timeout: "{{ dnf_lock_timeout }}"
+  when: oracle_db_free_package not in ansible_facts.packages
+
+- name: SQLcl Install Tasks
+  when: sqlcl_package not in ansible_facts.packages
+  block:
+    - name: Install SQLcl dependent packages
+      dnf:
+        name: "{{ sqlcl_prerequisite_pkgs }}"
+        state: present
+        lock_timeout: "{{ dnf_lock_timeout }}"
+
+    - name: Find all java binaries in the JVM directory
+      find:
+        paths: /usr/lib/jvm
+        recurse: yes
+        patterns: 'java'
+        file_type: file
+      register: all_java_binaries
+
+    - name: Set fact for the required Java path
+      set_fact:
+        java_bin_path: "{{ all_java_binaries.files | selectattr('path', 'search', '(?i)' ~ sqlcl_required_java_version) | map(attribute='path') | list | first | default('NOT_FOUND') }}"
+      when: all_java_binaries.matched > 0
+
+    - name: Ensure that correct Java is the default
+      alternatives:
+        name: java
+        path: "{{ java_bin_path }}"
+        link: /usr/bin/java
+      when: java_bin_path is defined
+
+    - name: Add the Oracle repo containing SQLcl
+      yum_repository:
+        name: oracle-software
+        description: "Allows installation of additional Oracle software via dnf"
+        baseurl: "{{ sqlcl_repo }}"
+
+    - name: Install SQLcl
+      dnf:
+        name: "{{ sqlcl_rpm }}"
+        state: present
+        enablerepo: "{{ sqlcl_repo }}"
+        disable_gpg_check: "{{ skip_gpg_check }}"
+        lock_timeout: "{{ dnf_lock_timeout }}"
+
+- name: (check_mode) Check if an "exclude=" line is present in dnf.conf
+  lineinfile:
+    dest: "/etc/dnf/dnf.conf"
+    state: present
+    regexp: '^exclude\s*='
+    line: "exclude="
+  check_mode: true
+  changed_when: false
+  register: exclude_check
+
+- name: Add new "exclude=" line to dnf.conf
+  ini_file:
+    path: "/etc/dnf/dnf.conf"
+    section: main
+    option: exclude
+    value: "{{ lock_list | join(' ') }}"
+    no_extra_spaces: true
+  when: exclude_check.msg == "line added"
+
+- name: Adjust existing "exclude=" line to dnf.conf
+  lineinfile:
+    path: "/etc/dnf/dnf.conf"
+    state: present
+    backrefs: true
+    regexp: '^(exclude\s*=\s*(?!.*\b{{ item }}\b).*)$'
+    line: '\1 {{ item }}'
+  loop: "{{ lock_list }}"
+  when: exclude_check.msg == "line replaced"

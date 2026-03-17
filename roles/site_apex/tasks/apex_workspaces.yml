@@ -1,0 +1,79 @@
+---
+- name: Get the APEX schema name
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/apex_schema_name.yml"
+
+- name: Check installed workspaces
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false) FROM {{ apex_schema.stdout }}.apex_workspaces WHERE workspace = '{{ item.workspace_name }}';
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_apex_workspaces
+  loop: "{{ apex_workspaces | default([]) | unique }}"
+
+- name: Create workspace schema
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_user.yml"
+  loop_control:
+    loop_var: workspace_details
+  vars:
+    passed_list: "{{ ora_db_users | default([]) | unique }}"
+  when: not workspace_details.workspace_found | bool
+  loop: "{{ check_apex_workspaces | json_query('results[*].{workspace_found:stdout}') }}"
+
+- name: Copy workspace script to remote
+  template:
+    src: "{{ item.workspace.workspace_name }}.j2"
+    dest: "/home/{{ oracle_user }}/{{ item.workspace.workspace_name }}.sql"
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_install_group }}"
+    mode: "u=rw,go="
+  when: not item.workspace_found | bool
+  loop: "{{ check_apex_workspaces | json_query('results[*].{workspace:item,workspace_found:stdout}') }}"
+
+- name: Install the site specific workspace
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    ALTER USER {{ apex_schema.stdout }} IDENTIFIED BY "{{ main_user_pass }}" ACCOUNT UNLOCK;
+    CONNECT {{ apex_schema.stdout }}/{{ main_user_pass }}@//localhost:{{ oracle_listener_port }}/{{ oracle_pdb_name }}
+    START /home/{{ oracle_user }}/{{ item.workspace.workspace_name }}.sql
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not item.workspace_found | bool
+  loop: "{{ check_apex_workspaces | json_query('results[*].{workspace:item,workspace_found:stdout}') }}"
+
+- name: Remove workspace script from remote
+  file:
+    path: "/home/{{ oracle_user }}/{{ item.workspace.workspace_name }}.sql"
+    state: absent
+  when: not item.workspace_found | bool
+  loop: "{{ check_apex_workspaces | json_query('results[*].{workspace:item,workspace_found:stdout}') }}"
+
+- name: Setup workspace schema
+  include_role:
+    name: oracle_app_schema
+
+- name: Add the APEX main user to workspace
+  include_tasks: "{{ include_task_file }}"
+  loop:
+    - "{{ playbook_dir }}/roles/common/tasks/apex_user.yml"
+    - "{{ playbook_dir }}/roles/common/tasks/apex_user_property.yml"
+  loop_control:
+    loop_var: include_task_file
+  vars:
+    passed_list: "{{ apex_users | default([]) | unique }}"

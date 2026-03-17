@@ -1,0 +1,28 @@
+---
+- name: Install nginx, prometheus, clickhouse and grafana 
+  hosts: all
+  gather_facts: true
+  become: true
+  become_user: root
+  tasks:
+    - include_vars: ./vault.yml
+    
+    - name: Install and Configure nginx on the host server
+      include_role:
+        name: nginx
+        tasks_from: main.yml
+
+    - name: Install and Configure prometheus on the host server
+      include_role:
+        name: prometheus
+        tasks_from: main.yml
+
+    - name: Install and Configure clickhouse on the host server
+      include_role:
+        name: clickhouse
+        tasks_from: main.yml
+
+    - name: Install and Configure Grafana on the host server
+      include_role:
+        name: grafana
+        tasks_from: main.yml

@@ -1,0 +1,22 @@
+---
+oracle_db_preinstall_package: "oracle-database-preinstall-{{ oracle_db_release }}"
+oracle_db_preinstall_package_uri: "https://yum.oracle.com/repo/OracleLinux/OL{{ ansible_distribution_major_version }}/appstream/{{ ansible_architecture }}/getPackage/oracle-database-preinstall-{{ oracle_db_release }}-1.0-1.el{{ ansible_distribution_major_version }}.{{ ansible_architecture }}.rpm"
+
+oracle_db_free_package: "oracle-{%if oracle_db_release == '26ai' %}ai-{% endif %}database-free-{{ oracle_db_release }}"
+oracle_db_free_package_uri: "https://download.oracle.com/otn-pub/otn_software/db-free/oracle-{%if oracle_db_release == '26ai' %}ai-{% endif %}database-free-{%if oracle_db_release != '23c' %}{{ oracle_db_release }}-{{ oracle_db_version }}-1{% else %}23c-1.0-1{% endif %}.el{{ ansible_distribution_major_version }}.{{ ansible_architecture }}.rpm"
+oracle_db_free_lock: true
+
+sqlcl_home: /opt/oracle/sqlcl
+sqlcl_repo: "http://yum.oracle.com/repo/OracleLinux/OL{{ ansible_distribution_major_version }}/oracle/software/$basearch"
+sqlcl_package: sqlcl
+sqlcl_rpm: sqlcl
+sqlcl_required_java_version: 21
+sqlcl_prerequisite_pkgs:
+  - "java-{{ sqlcl_required_java_version }}"
+
+lock_list:
+  - "{{ oracle_db_preinstall_package }}"
+  - "{{ oracle_db_free_package }}"
+  - "{{ sqlcl_package }}"
+
+skip_gpg_check: "{% if ansible_distribution in ['RedHat', 'Rocky'] %}true{% else %}false{% endif %}"

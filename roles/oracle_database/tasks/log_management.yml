@@ -1,0 +1,41 @@
+---
+- name: Create daily logrotate for Oracle log files
+  template:
+    src: "logrotate_oracle.j2"
+    dest: "/etc/logrotate.d/oracle"
+    owner: "root"
+    group: "root"
+    mode: "u=rw,go=r"
+
+- name: Execute sestatus and capture output
+  command: sestatus
+  register: sestatus_output
+  changed_when: false
+  ignore_errors: true
+
+- name: Extract the current SELinux mode
+  set_fact:
+    current_selinux_mode: "{{ (sestatus_output.stdout_lines | select('match', '^SELinux status:') | list | first).split(':')[1] | trim }}"
+  when: sestatus_output is defined and sestatus_output.rc == 0
+
+- name: Adjust Oracle alert and listener logs to prevent logrotate SELinux permission errors
+  sefcontext:
+    target: "{{ item }}"
+    setype: var_log_t
+    state: present
+  when: current_selinux_mode | lower != 'disabled'
+  loop:
+    - "/opt/oracle/diag/rdbms/.*/.*/trace(/.*)?"
+    - "/opt/oracle/diag/tnslsnr/.*/listener/trace(/.*)?"
+
+- name: Check SELinux file context of Oracle logs
+  command: restorecon -nirv /opt/oracle/diag
+  when: current_selinux_mode | lower != 'disabled'
+  changed_when: false
+  register: check_oracle_logs_selinux
+
+- name: Apply SELinux file context to Oracle logs
+  command: restorecon -irv /opt/oracle/diag
+  when:
+    - check_oracle_logs_selinux.stdout is defined
+    - check_oracle_logs_selinux.stdout | length > 0

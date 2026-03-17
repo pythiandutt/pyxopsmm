@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: clickhouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    isDefault: false
+    editable: false
+    jsonData:
+      host: localhost
+      port: 9000
+      defaultDatabase: default
+      tlsSkipVerify: True
+      protocol: native
+      username: clickhouse-admin
+    secureJsonData:
+      password: password123!

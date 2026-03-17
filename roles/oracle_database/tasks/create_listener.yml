@@ -1,0 +1,24 @@
+---
+- name: Check that the listener is actually running (within the service)
+  shell: "set -o pipefail; ps -ef | ( grep [t]ns || true ) | ( grep -w LISTENER || true ) | wc -l"
+  changed_when: false
+  register: listener_found_check
+
+- name: Create a custom listener
+  shell: |
+    set -o pipefail
+    {{ oracle_home }}/bin/netca                                      \
+      /orahome {{ oracle_home }}                                     \
+      /instype typical                                               \
+      /inscomp client,oraclenet,javavm,server,ano                    \
+      /insprtcl tcp                                                  \
+      /cfg local                                                     \
+      /authadp NO_VALUE                                              \
+      /responseFile {{ oracle_home }}/network/install/netca_typ.rsp  \
+      /silent                                                        \
+      /listenerparameters DEFAULT_SERVICE={{ oracle_sid }}           \
+      /lisport {{ oracle_listener_port }}
+  become: true
+  become_user: "{{ oracle_user }}"
+  register: listener_create_output
+  when: listener_found_check.stdout == "0"

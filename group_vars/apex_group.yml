@@ -1,0 +1,6 @@
+---
+apex_install_type: full
+ords_install: true
+webserver_install: true
+database_actions: true
+oracle_pdb_name: "APEX"

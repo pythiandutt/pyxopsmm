@@ -1,0 +1,99 @@
+---
+- name: Create grafana group
+  group:
+    name: "{{ grafana_group }}"
+    state: present
+
+- name: Create grafana user
+  user:
+    name: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    create_home: no
+    shell: /sbin/nologin
+    state: present
+
+- name: Install prerequisite packages for Grafana
+  dnf:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ grafana_prereq_pkgs }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Create Grafana log directory
+  file:
+    path: "{{ grafana_log_dir }}"
+    state: directory
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0755'
+
+- name: Download Grafana and Verify Checksum
+  get_url:
+    url: "{{ grafana_wget_url}}"
+    dest: "{{ grafana_stage }}/{{ grafana_file_name }}"
+    checksum: "{{ grafana_checksum }}"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0644'
+
+- name: Extract Grafana binary
+  unarchive:
+    src: "{{ grafana_stage }}/{{ grafana_file_name }}"
+    dest: "{{ grafana_stage }}"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    remote_src: yes
+
+- name: Copy Grafana folder to {{ grafana_install_dir}}
+  copy:
+    src: "{{ grafana_stage }}/grafana-{{ grafana_version }}/"
+    dest: "{{ grafana_install_dir }}/"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: '0755'
+    remote_src: yes
+
+- name: Render Grafana configuration file
+  template:
+    src: grafana.ini.j2
+    dest: "{{ grafana_install_dir }}/conf/grafana.ini"
+    owner: "{{ grafana_user}}"
+    group: "{{ grafana_group }}"
+    mode: '0644'
+
+- name: Render Grafana proxy configuration file in nginx
+  template:
+    src: "grafana.conf.j2"
+    dest: "{{ nginx_conf_dir }}/grafana.conf"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Render Grafana systemd service file
+  template:
+    src: "grafana.service.j2"
+    dest: "/etc/systemd/system/{{ grafana_systemd_service }}"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Create provisioning directories
+  file:
+    path: "{{ grafana_install_dir }}/conf/provisioning/{{ item }}"
+    state: directory
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: "0755"
+  loop:
+    - datasources
+    - dashboards
+    - notifiers
+
+- name: Setup logrotate for grafana
+  template:
+    dest: "/etc/logrotate.d/grafana"
+    src: "logrotate_grafana.j2"
+    owner: "root"
+    group: "root"
+    mode: "u=rw,go=r"

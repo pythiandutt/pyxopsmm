@@ -1,0 +1,72 @@
+---
+- name: Check if APEX is installed in PDB
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT MAX(schema) FROM dba_registry WHERE comp_id = 'APEX';
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_apex_installed
+
+- name: Install APEX into PDB (takes ~5-10 minutes)
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    cd {{ apex_unzip_base }}/apex
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    START {{ apex_install_script }} {{ apex_tbsp }} {{ apex_tbsp }} {{ temp_tbsp | default('TEMP', true) }} /i/
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when: check_apex_installed.stdout | length == 0
+
+- name: Check the APEX images location
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+     WHERE apex_instance_admin.get_parameter('IMAGE_PREFIX') = '{{ apex_images_location }}';
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_images_location
+
+- name: Configure the APEX images location (static resources) to use the Oracle CDN
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    cd {{ apex_unzip_base }}/apex/utilities
+    echo -e "{{ apex_images_location }}" | {{ oracle_home }}/bin/sqlplus -L '/ as sysdba' @reset_image_prefix.sql
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when: not check_images_location.stdout | bool

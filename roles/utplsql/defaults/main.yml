@@ -1,0 +1,35 @@
+---
+schema_name: UTPLSQL3
+
+software_version: "v3.1.14.4197"
+
+ora_db_users:
+  - { user_name: "{{ schema_name }}" , profile_name: '' , default_tbsp: "{{ site_prefix }}_utilities" , temp_tbsp: '' , status: '' , auth_type: "NO AUTHENTICATION" , state: present }
+
+ora_db_quotas:
+  - { user_name: "{{ schema_name }}" , tbsp_quota: 104857600 , tbsp_name: "{{ site_prefix }}_utilities" }
+
+ora_db_system_privs:
+  - { sys_priv: "ADMINISTER DATABASE TRIGGER", grantee: "{{ schema_name }}" , grant_options: "WITH ADMIN OPTION" , state: present }
+  - { sys_priv: "ALTER SESSION"              , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE ANY CONTEXT"         , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE PROCEDURE"           , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE PUBLIC SYNONYM"      , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE SEQUENCE"            , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE SESSION"             , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE SYNONYM"             , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE TABLE"               , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE TRIGGER"             , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE TYPE"                , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+  - { sys_priv: "CREATE VIEW"                , grantee: "{{ schema_name }}" , grant_options: "" , state: present }
+
+ora_db_object_privs:
+  - { dbms_crypto: { type: '' , owner: "SYS" , priv: "EXECUTE" , grantee: "{{ schema_name }}" , grant_options: "" , state: present } }
+  - { dbms_lob:    { type: '' , owner: "SYS" , priv: "EXECUTE" , grantee: "{{ schema_name }}" , grant_options: "" , state: present } }
+  - { dbms_lock:   { type: '' , owner: "SYS" , priv: "EXECUTE" , grantee: "{{ schema_name }}" , grant_options: "" , state: present } }
+  - { dbms_random: { type: '' , owner: "SYS" , priv: "EXECUTE" , grantee: "{{ schema_name }}" , grant_options: "" , state: present } }
+  - { dbms_sql:    { type: '' , owner: "SYS" , priv: "EXECUTE" , grantee: "{{ schema_name }}" , grant_options: "" , state: present } }
+  - { dbms_xmlgen: { type: '' , owner: "SYS" , priv: "EXECUTE" , grantee: "{{ schema_name }}" , grant_options: "" , state: present } }
+
+ora_db_proxy_privs:
+  - { proxy_name: "{{ main_user }}" , proxy_client: "{{ schema_name }}" , proxy_options: "" , state: present }

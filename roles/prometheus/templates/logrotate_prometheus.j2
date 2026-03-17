@@ -1,0 +1,10 @@
+{{ prometheus_log_dir }}/logs/* {
+    su {{ prometheus_user }} {{ prometheus_group }}
+    compress
+    copytruncate
+    daily
+    missingok
+    notifempty
+    rotate {{ log_days_to_keep }}
+    size {{ log_size_before_rotate }}
+}

@@ -1,0 +1,20 @@
+---
+- name: Get service facts
+  service_facts:
+
+- name: Start the DB service if down
+  service:
+    name: "{{ db_systemd_service }}"
+    state: started
+  when:
+    - ansible_facts['services'][db_systemd_service] is defined
+    - ansible_facts['services'][db_systemd_service]['state'] != 'running'
+
+- name: Create Oracle Listener
+  import_tasks: create_listener.yml
+
+- name: Create Oracle Database
+  import_tasks: create_database.yml
+
+- name: Oracle file and log management
+  import_tasks: log_management.yml

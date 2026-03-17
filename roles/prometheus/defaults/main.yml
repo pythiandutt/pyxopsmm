@@ -1,0 +1,39 @@
+---
+# Defining default variables for prometheus. 
+# These variables can be overridden in the inventory or playbook as needed.
+prometheus_user: prometheus
+prometheus_group: prometheus
+prometheus_base: /u01
+prometheus_stage: "{{ prometheus_base }}/prometheus"
+prometheus_home: "{{ prometheus_base }}/prometheus"
+prometheus_install_dir: "/usr/local/bin"
+prometheus_port: 9090
+prometheus_wget_url: "https://github.com/prometheus/prometheus/releases/download/v3.10.0/prometheus-3.10.0.linux-amd64.tar.gz"
+prometheus_checksum: "sha256:41c50d97bb6a181623fc89d3fe61d0cc68ee69cc93da9091b8bba005f9690122"
+prometheus_file_name: "prometheus-3.10.0.linux-amd64.tar.gz"
+prometheus_version: "3.10.0"
+prometheus_systemd_service: prometheus.service
+nginx_conf_dir: /etc/nginx/default.d
+
+prometheus_dirs:
+  - /etc/prometheus
+  - /var/lib/prometheus
+  - /u01/prometheus
+
+prometheus_prereq_pkgs:
+  - httpd-tools
+  - wget
+
+# Security settings
+prometheus_admin_user: "{{ prometheus_ds_auth_user }}"
+prometheus_admin_password: "{{ prometheus_ds_auth_pass }}"
+
+# log rotation settings
+prometheus_log_mode: "console file"
+prometheus_log_level: "info"
+prometheus_log_dir: "{{ prometheus_home }}/logs"
+
+# For logrotate settings
+log_days_to_keep: 15
+log_size_before_rotate: 10M
+log_mode: debug

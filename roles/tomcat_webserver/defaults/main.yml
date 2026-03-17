@@ -1,0 +1,14 @@
+---
+tomcat_systemd_service: tomcat.service
+# Always use "archive.apache.org" instead of "dlcdn.apache.org" because the latter does not keep older versions online
+tomcat_uri: https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.115/bin/apache-tomcat-9.0.115.tar.gz
+tomcat_jvm_memory: "-Xms256m -Xmx512m"
+tomcat_java_version: 21
+tomcat_prerequisite_pkgs:
+  - "java-{{ tomcat_java_version }}"
+
+webserver_shell: /sbin/nologin
+
+log_days_to_keep: 15
+log_size_before_rotate: 10M
+log_dirs: "{{ webserver_home }}/logs/catalina.out {{ webserver_home }}/logs/*.log"

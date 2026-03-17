@@ -1,0 +1,30 @@
+---
+- name: Generate random password for self-signed certificate keystore
+  set_fact:
+    keystore_pass: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters') }}"
+
+- name: Get service facts
+  service_facts:
+
+- name: Start the Tomcat service if down
+  service:
+    name: "{{ tomcat_systemd_service }}"
+    state: started
+  when:
+    - ansible_facts['services'][tomcat_systemd_service] is defined
+    - ansible_facts['services'][tomcat_systemd_service]['state'] != 'running'
+
+- name: Add OS groups and users for Tomcat webserver
+  import_tasks: webserver_os_users.yml
+
+- name: Configure the Linux firewalld service for HTTPS
+  import_tasks: webserver_firewall.yml
+
+- name: Download and install Tomcat software
+  import_tasks: tomcat_software.yml
+
+- name: Add systemd service for Tomcat
+  import_tasks: tomcat_systemd_service.yml
+
+- name: Enable Tomcat HTTPS
+  import_tasks: tomcat_https.yml

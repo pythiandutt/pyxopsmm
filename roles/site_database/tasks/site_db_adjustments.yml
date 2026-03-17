@@ -1,0 +1,128 @@
+---
+- name: ({{ container_item }}) Check AWR Settings
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_hist_wr_control
+     WHERE dbid = DBMS_WORKLOAD_REPOSITORY.LOCAL_AWR_DBID()
+       AND EXTRACT(day FROM retention)
+         + EXTRACT(hour FROM retention)/24
+         + EXTRACT(minute FROM retention)/24/60
+         + ROUND(EXTRACT(second FROM retention)/24/60/60) = {{ site_awr_retention_days }}
+       AND EXTRACT(day FROM snap_interval)*1400
+         + EXTRACT(hour FROM snap_interval)*60
+         + EXTRACT(minute FROM snap_interval)
+         + ROUND(EXTRACT(second FROM snap_interval)/60) = {{ site_awr_interval_minutes }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_awr_settings
+
+- name: ({{ container_item }}) Adjust AWR Settings
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_WORKLOAD_REPOSITORY.MODIFY_SNAPSHOT_SETTINGS(
+          retention => {{ site_awr_retention_days }}*1440,
+          interval  => {{ site_awr_interval_minutes }},
+          dbid      => DBMS_WORKLOAD_REPOSITORY.LOCAL_AWR_DBID()
+       );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not check_awr_settings.stdout | bool
+
+- name: ({{ container_item }}) Check AWR Default Moving Window Baseline
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_hist_baseline
+     WHERE dbid = DBMS_WORKLOAD_REPOSITORY.LOCAL_AWR_DBID()
+       AND moving_window_size = {{ site_awr_window_days }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_window_baseline
+
+- name: ({{ container_item }}) Adjust AWR Default Moving Window Baseline
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_WORKLOAD_REPOSITORY.MODIFY_BASELINE_WINDOW_SIZE(
+          window_size => {{ site_awr_window_days }},
+          dbid        => DBMS_WORKLOAD_REPOSITORY.LOCAL_AWR_DBID()
+       );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not check_window_baseline.stdout | bool
+
+- name: ({{ container_item }}) Check Optimizer Statistics History
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+     WHERE DBMS_STATS.GET_STATS_HISTORY_RETENTION() = {{ site_optimizer_stats_retention_days }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_stats_history
+
+- name: ({{ container_item }}) Adjust Optimizer Statistics History
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_STATS.ALTER_STATS_HISTORY_RETENTION(
+          retention => {{ site_optimizer_stats_retention_days }}
+       );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not check_stats_history.stdout | bool

@@ -1,0 +1,24 @@
+---
+- name: Lookup the main_user temporary password
+  set_fact:
+    main_user_pass: "{{ lookup('file', './apex.' + ansible_hostname + '.' + main_user + '.pwd') }}"
+  ignore_errors: true
+  register: lookup_result
+
+- name: Generate temporary password for main_user if password not found
+  set_fact:
+    main_user_pass: "{{ lookup('password', './apex.' + ansible_hostname + '.' + main_user + '.pwd', length=24) }}"
+  when: lookup_result.failed
+
+- name: Site Specific APEX workspaces
+  import_tasks: apex_workspaces.yml
+
+- name: Site Specific APEX instance-level configuration
+  import_tasks: apex_instance_configuration.yml
+
+- name: Site Specific APEX workspace-level configuration
+  import_tasks: apex_workspace_configuration.yml
+
+- name: Site Specific ORDS configuration
+  import_tasks: ords_configuration.yml
+  when: ords_install | bool

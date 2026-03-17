@@ -1,0 +1,63 @@
+---
+- name: Check Oracle Database system privilege existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_sys_privs
+     WHERE privilege = '{{ item.sys_priv }}' COLLATE binary_ci
+       AND grantee = '{{ item.grantee }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_oracle_sys_privs
+  loop: "{{ passed_list }}"
+
+- name: Add Oracle Database system privilege
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    GRANT {{ item.syspriv.sys_priv }} TO {{ item.syspriv.grantee }} {{ item.syspriv.grant_options }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.syspriv.state | lower == "present"
+    - not item.grant_found | bool
+  loop: "{{ check_oracle_sys_privs | json_query('results[*].{syspriv:item,grant_found:stdout}') }}"
+
+- name: Remove Oracle Database system privilege
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    REVOKE {{ item.syspriv.sys_priv }} FROM {{ item.syspriv.grantee }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.syspriv.state | lower == "absent"
+    - item.grant_found | bool
+  loop: "{{ check_oracle_sys_privs | json_query('results[*].{syspriv:item,grant_found:stdout}') }}"

@@ -1,0 +1,99 @@
+---
+- name: Check current APEX patch level
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(patch_version),0) FROM apex_patches;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: current_apex_patch_set
+
+- name: Unzip patch_set
+  unarchive:
+    src: "{{ apex_patch_set_zip_file }}"
+    dest: "{{ apex_unzip_base }}"
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_install_group }}"
+    mode: "u=rwx,go="
+    remote_src: true
+  when: current_apex_patch_set.stdout | int < apex_patch_set_version
+
+- name: Install APEX patch_set into database
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    cd {{ apex_unzip_base }}/{{ apex_patch_set_number }}
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    START catpatch.sql
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+    NLS_LANG: "American_America.AL32UTF8"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when: current_apex_patch_set.stdout | int < apex_patch_set_version
+
+- name: Check the APEX CDN path
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+     WHERE apex_instance_admin.get_parameter('IMAGE_PREFIX') = '{{ apex_images_location }}';
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: current_cdn_path
+
+- name: Configure the APEX images location (static resources) to use the Oracle CDN
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    cd {{ apex_unzip_base }}/apex/utilities
+    echo -e "{{ apex_images_location }}" | {{ oracle_home }}/bin/sqlplus -L '/ as sysdba' @reset_image_prefix.sql
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - not current_cdn_path.stdout | bool
+    - current_apex_patch_set.stdout | int < apex_patch_set_version
+
+- name: Copy patch APEX images to the webserver document root
+  copy:
+    src: "{{ apex_unzip_base }}/{{ apex_patch_set_number }}/images/"
+    dest: "{{ webserver_document_root }}/i/"
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    mode: "u=rx,go="
+    force: true
+    remote_src: true
+  when:
+    - apex_images_location == "/i/"
+    - current_apex_patch_set.stdout | int < apex_patch_set_version
+  notify: restart_tomcat

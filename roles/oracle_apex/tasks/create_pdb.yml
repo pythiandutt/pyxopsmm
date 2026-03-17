@@ -1,0 +1,45 @@
+---
+- name: Check if PDB already exists
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} >/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading OFF trim ON tab OFF pagesize 0
+    SELECT name FROM v\$containers WHERE name = '{{ oracle_pdb_name }}';
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: pdb_status
+
+- name: Create PDB
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} >/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    CREATE PLUGGABLE DATABASE {{ oracle_pdb_name }} ADMIN USER {{ apex_admin_user }} IDENTIFIED BY $(tr -dc A-Za-z </dev/urandom | head -c 32);
+    ALTER PLUGGABLE DATABASE {{ oracle_pdb_name }} OPEN;
+    ALTER PLUGGABLE DATABASE {{ oracle_pdb_name }} SAVE STATE;
+    ALTER SESSION SET container = {{ oracle_pdb_name }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - pdb_status.stdout is defined
+    - pdb_status.stdout != oracle_pdb_name
+
+- name: Process APEX tablespaces
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_tablespace.yml"
+  vars:
+    container_name: "{{ oracle_pdb_name }}"
+    passed_list: "{{ apex_tablespaces | default([]) | unique }}"

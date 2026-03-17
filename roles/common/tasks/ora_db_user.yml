@@ -1,0 +1,64 @@
+---
+- name: Check Oracle Database user existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_users
+     WHERE username = '{{ item.user_name }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_oracle_users
+  loop: "{{ passed_list }}"
+
+- name: Add Oracle Database user
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    CREATE USER {{ item.user.user_name }} {{ item.user.status | default('', true) }} {{ item.user.auth_type | default('', true) }}
+    PROFILE {{ item.user.profile_name | default('DEFAULT', true) }}
+    DEFAULT TABLESPACE {{ item.user.default_tbsp }} TEMPORARY TABLESPACE {{ item.user.temp_tbsp | default('TEMP', true) }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.user.state | lower == "present"
+    - not item.user_found | bool
+  loop: "{{ check_oracle_users | json_query('results[*].{user:item,user_found:stdout}') }}"
+
+- name: Remove Oracle Database user
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    DROP USER {{ item.user.user_name }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.user.state | lower == "absent"
+    - item.user_found | bool
+  loop: "{{ check_oracle_users | json_query('results[*].{user:item,user_found:stdout}') }}"

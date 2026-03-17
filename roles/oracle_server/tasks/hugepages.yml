@@ -1,0 +1,28 @@
+---
+- name: Configure memlock limits for Linux HugePages
+  pam_limits:
+    domain: oracle
+    limit_type: "{{ item }}"
+    limit_item: memlock
+    value: unlimited
+  loop:
+    - soft
+    - hard
+
+- name: Check Transparent HugePages
+  shell: |
+    (cat /sys/kernel/mm/transparent_hugepage/enabled) || true
+  ignore_errors: true
+  changed_when: false
+  register: thp_check
+
+- name: Update Grub default config and disable at run-time
+  shell: |
+    grubby --args="transparent_hugepage=never" --update-kernel=ALL
+    echo 'never' > /sys/kernel/mm/transparent_hugepage/enabled
+    echo 'never' > /sys/kernel/mm/transparent_hugepage/defrag
+  when: thp_check.stdout == "[always] madvise never" or thp_check.stdout == "always [madvise] never"
+  notify: reboot_server
+
+- name: Flush handlers after Grub and HugePages tasks
+  meta: flush_handlers

@@ -1,0 +1,37 @@
+---
+- name: Check if SSL Tomcat is running
+  shell: curl --insecure --silent https://localhost:{{ webserver_https_port }} || true
+  changed_when: false
+  register: tomcat_https_check
+
+- name: Remove existing keystore if re-creating
+  file:
+    path: "{{ webserver_home }}/.keystore"
+    state: absent
+  when: tomcat_https_check.stdout_lines is not search("Apache")
+
+- name: Setup a keystore
+  shell: |
+    "$(readlink -f /usr/bin/java | sed 's|/bin/java$||')/bin/keytool"                            \
+      -genkey                                                                                    \
+      -noprompt                                                                                  \
+      -alias Tomcat                                                                              \
+      -keyalg RSA                                                                                \
+      -keysize 4096                                                                              \
+      -validity 3650                                                                             \
+      -dname "CN=Unknown, OU=Unknown, O=Unknown, L=Unknown, ST=Unknown, C=CA"  \                 \
+      -keystore {{ webserver_home }}/.keystore                                                   \
+      -storepass {{ keystore_pass }}
+    chown {{ webserver_user }}:{{ webserver_group }} {{ webserver_home }}/.keystore
+    chmod "u=rw,go=" {{ webserver_home }}/.keystore
+  when: tomcat_https_check.stdout_lines is not search("Apache")
+
+- name: Update the Tomcat server configuration file
+  template:
+    src: "server.xml.j2"
+    dest: "{{ webserver_home }}/conf/server.xml"
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    mode: "u=rw,go="
+  when: tomcat_https_check.stdout_lines is not search("Apache")
+  notify: restart_tomcat

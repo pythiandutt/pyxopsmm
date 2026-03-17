@@ -1,0 +1,76 @@
+---
+- name: Check REST enabled schema existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM ords_metadata.ords_schemas
+     WHERE parsing_schema = '{{ item.user_name }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_rest_enabled_schemas
+  loop: "{{ passed_list }}"
+
+- name: Add REST enabled schema
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+      ORDS_ADMIN.ENABLE_SCHEMA(
+          p_enabled => {{ item.rest_schema.enabled | bool }},
+          p_schema => '{{ item.rest_schema.user_name }}',
+          p_url_mapping_type => '{{ item.rest_schema.mapping_type | upper }}',
+          p_url_mapping_pattern => '{{ item.rest_schema.mapping_pattern | lower }}',
+          p_auto_rest_auth => {{ item.rest_schema.auto_rest_auth | bool }}
+      );
+      COMMIT;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.rest_schema.state | lower == "present"
+    - not item.enablement_found | bool
+  loop: "{{ check_rest_enabled_schemas | json_query('results[*].{rest_schema:item,enablement_found:stdout}') }}"
+
+- name: Remove REST enabled schema
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+      ORDS_ADMIN.DROP_REST_FOR_SCHEMA(p_schema => '{{ item.rest_schema.user_name }}');
+      COMMIT;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.rest_schema.state | lower == "absent"
+    - item.enablement_found | bool
+  loop: "{{ check_rest_enabled_schemas | json_query('results[*].{rest_schema:item,enablement_found:stdout}') }}"

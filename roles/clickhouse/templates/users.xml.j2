@@ -1,0 +1,32 @@
+<clickhouse>
+    <profiles>
+        <default>
+            <!-- Default settings go here -->
+            <max_memory_usage>10000000000</max_memory_usage>
+            <load_balancing>random</load_balancing>
+        </default>
+
+        <!-- Other profiles can be defined here -->
+        <readonly>
+            <readonly>1</readonly>
+        </readonly>
+    </profiles>
+
+    <users>
+        <{{ ch_ds_auth_user }}>
+            <password>{{ ch_ds_auth_pass }}</password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+        </{{ ch_ds_auth_user }}>
+    </users>
+
+    <quotas>
+        <default>
+             <!-- Default quotas go here -->
+        </default>
+    </quotas>
+</clickhouse>

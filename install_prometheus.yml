@@ -1,0 +1,12 @@
+---
+- name: Install prometheus
+  hosts: all
+  gather_facts: true
+  become: true
+  become_user: root
+  tasks:
+    - include_vars: ./vault.yml
+    - name: Install and Configure prometheus on the host server
+      include_role:
+        name: prometheus
+        tasks_from: main.yml

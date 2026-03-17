@@ -1,0 +1,249 @@
+---
+- name: ({{ container_item }}) Check Audit Trail Tablespaces
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_audit_mgmt_config_params
+     WHERE parameter_name = 'DB AUDIT TABLESPACE' COLLATE binary_ci
+       AND parameter_value = '{{ site_db_audit_tablespace }}' COLLATE binary_ci
+       AND audit_trail = DECODE('{{ item }}','AUDIT_TRAIL_AUD_STD','STANDARD AUDIT TRAIL'
+                                            ,'AUDIT_TRAIL_FGA_STD','FGA AUDIT TRAIL'
+                                            ,'AUDIT_TRAIL_UNIFIED','UNIFIED AUDIT TRAIL',
+                                '{{ item }}') COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_audit_tablespaces
+  loop:
+    - AUDIT_TRAIL_AUD_STD
+    - AUDIT_TRAIL_FGA_STD
+    - AUDIT_TRAIL_UNIFIED
+
+- name: ({{ container_item }}) Move Audit Trails
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_AUDIT_MGMT.SET_AUDIT_TRAIL_LOCATION(
+          audit_trail_type           => DBMS_AUDIT_MGMT.{{ item.audit_trail }},
+          audit_trail_location_value => '{{ site_db_audit_tablespace }}'
+       );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not item.using_audit_tbsp | bool
+  loop: "{{ check_audit_tablespaces | json_query('results[*].{audit_trail:item,using_audit_tbsp:stdout}') }}"
+
+- name: ({{ container_item }}) Check Audit Partition Interval
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_part_tables
+     WHERE owner = 'AUDSYS' COLLATE binary_ci
+       AND table_name = 'AUD\$UNIFIED' COLLATE binary_ci
+       AND interval = 'NUMTODSINTERVAL({{ site_db_audit_partition_interval }}, ''{{ site_db_audit_partition_unit }}'')' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_audit_partition_interval
+
+- name: ({{ container_item }}) Adjust Audit Partition Interval
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_AUDIT_MGMT.ALTER_PARTITION_INTERVAL(
+          interval_number    => {{ site_db_audit_partition_interval }},
+          interval_frequency => '{{ site_db_audit_partition_unit }}'
+       );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not check_audit_partition_interval.stdout | bool
+
+- name: ({{ container_item }}) Check for Audit Trail Cleanup Initialization
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0 serveroutput ON
+    BEGIN
+       IF DBMS_AUDIT_MGMT.IS_CLEANUP_INITIALIZED(DBMS_AUDIT_MGMT.AUDIT_TRAIL_DB_STD) THEN
+          DBMS_OUTPUT.PUT_LINE('TRUE');
+       ELSE
+          DBMS_OUTPUT.PUT_LINE('FALSE');
+       END IF;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_audit_initialization
+
+- name: ({{ container_item }}) Run Audit Trail Cleanup Initialization
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_AUDIT_MGMT.INIT_CLEANUP(
+          audit_trail_type          => DBMS_AUDIT_MGMT.AUDIT_TRAIL_ALL,
+          default_cleanup_interval  => {{ site_db_audit_purge_interval_hours }},
+          container                 => DBMS_AUDIT_MGMT.CONTAINER_CURRENT
+       );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: check_audit_initialization.stdout is search("FALSE")
+
+- name: ({{ container_item }}) Check for Audit Trail Timestamp Advance Job
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_scheduler_jobs
+     WHERE job_name = '{{ site_db_audit_ts_job }}' COLLATE binary_ci
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_audit_ts_job
+
+- name: ({{ container_item }}) Add Audit Trail Timestamp Advance Job
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_SCHEDULER.CREATE_JOB(
+          job_name => 'AUDSYS.{{ site_db_audit_ts_job }}',
+          job_type => 'PLSQL_BLOCK',
+          job_action => '--
+    BEGIN
+       DBMS_AUDIT_MGMT.SET_LAST_ARCHIVE_TIMESTAMP(DBMS_AUDIT_MGMT.AUDIT_TRAIL_UNIFIED, TRUNC(systimestamp)-{{ site_db_audit_ts_keep_days }}, NULL, DBMS_AUDIT_MGMT.CONTAINER_CURRENT);
+       DBMS_AUDIT_MGMT.SET_LAST_ARCHIVE_TIMESTAMP(DBMS_AUDIT_MGMT.AUDIT_TRAIL_AUD_STD, TRUNC(systimestamp)-{{ site_db_audit_ts_keep_days }}, NULL, DBMS_AUDIT_MGMT.CONTAINER_CURRENT);
+       DBMS_AUDIT_MGMT.SET_LAST_ARCHIVE_TIMESTAMP(DBMS_AUDIT_MGMT.AUDIT_TRAIL_FGA_STD, TRUNC(systimestamp)-{{ site_db_audit_ts_keep_days }}, NULL, DBMS_AUDIT_MGMT.CONTAINER_CURRENT);
+       DBMS_AUDIT_MGMT.SET_LAST_ARCHIVE_TIMESTAMP(DBMS_AUDIT_MGMT.AUDIT_TRAIL_OS,      TRUNC(systimestamp)-{{ site_db_audit_ts_keep_days }}, NULL, DBMS_AUDIT_MGMT.CONTAINER_CURRENT);
+       DBMS_AUDIT_MGMT.SET_LAST_ARCHIVE_TIMESTAMP(DBMS_AUDIT_MGMT.AUDIT_TRAIL_XML,     TRUNC(systimestamp)-{{ site_db_audit_ts_keep_days }}, NULL, DBMS_AUDIT_MGMT.CONTAINER_CURRENT);
+       DBMS_AUDIT_MGMT.LOAD_UNIFIED_AUDIT_FILES;
+    END;
+    ',
+          repeat_interval => 'FREQ=DAILY;BYHOUR={{ site_db_audit_ts_start_hour }};BYMINUTE=05',
+          start_date => TO_TIMESTAMP_TZ(systimestamp),
+          job_class => 'DEFAULT_JOB_CLASS',
+          comments => 'Update the Audit trail management last archive timestamp',
+          auto_drop => FALSE,
+          enabled => TRUE
+       );
+       DBMS_SCHEDULER.SET_ATTRIBUTE(name=>'AUDSYS.{{ site_db_audit_ts_job }}', attribute=>'job_weight', value=>1);
+       DBMS_SCHEDULER.RUN_JOB('AUDSYS.{{ site_db_audit_ts_job }}');
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not check_audit_ts_job.stdout | bool
+
+- name: ({{ container_item }}) Check for Audit Trail Purge Job
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_audit_mgmt_cleanup_jobs
+     WHERE job_name = '{{ site_db_audit_purge_job }}' COLLATE binary_ci
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_audit_purge_job
+
+- name: ({{ container_item }}) Add Audit Trail Purge Job
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_AUDIT_MGMT.CREATE_PURGE_JOB (
+          AUDIT_TRAIL_TYPE            => DBMS_AUDIT_MGMT.AUDIT_TRAIL_ALL,
+          AUDIT_TRAIL_PURGE_INTERVAL  => {{ site_db_audit_purge_interval_hours }},
+          AUDIT_TRAIL_PURGE_NAME      => '{{ site_db_audit_purge_job }}',
+          USE_LAST_ARCH_TIMESTAMP     => TRUE,
+          CONTAINER                   => DBMS_AUDIT_MGMT.CONTAINER_CURRENT
+       );
+    END;
+    /
+    BEGIN
+       DBMS_SCHEDULER.SET_ATTRIBUTE(
+          name      => 'AUDSYS.{{ site_db_audit_purge_job }}',
+          attribute => 'repeat_interval',
+          value     => 'FREQ=DAILY;BYHOUR={{ site_db_audit_purge_start_hour }};BYMINUTE=10'
+       );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not check_audit_purge_job.stdout | bool

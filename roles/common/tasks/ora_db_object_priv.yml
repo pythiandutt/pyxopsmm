@@ -1,0 +1,68 @@
+---
+- name: Check Oracle Database object privilege existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_tab_privs
+     WHERE owner = '{{ item.value.owner }}' COLLATE binary_ci
+       AND table_name = '{{ item.key }}' COLLATE binary_ci
+       AND privilege = '{{ item.value.priv }}' COLLATE binary_ci
+       AND grantee = '{{ item.value.grantee }}' COLLATE binary_ci
+       AND type = DECODE('{{ item.value.type }}','',type,'{{ item.value.type }}') COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_oracle_object_privs
+  with_dict: "{{ passed_list }}"
+
+- name: Add Oracle Database object privilege
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    GRANT {{ item.objgrant.value.priv }} ON {{ item.objgrant.value.type }} {{ item.objgrant.value.owner }}.{{ item.objgrant.key }}
+    TO {{ item.objgrant.value.grantee }} {{ item.objgrant.value.grant_options }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.objgrant.value.state | lower == "present"
+    - not item.grant_found | bool
+  loop: "{{ check_oracle_object_privs | json_query('results[*].{objgrant:item,grant_found:stdout}') }}"
+
+- name: Remove Oracle Database object privilege
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    REVOKE {{ item.objgrant.value.priv }} ON {{ item.objgrant.value.type }} {{ item.objgrant.value.owner }}.{{ item.objgrant.key }}
+    FROM {{ item.objgrant.value.grantee }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.objgrant.value.state | lower == "absent"
+    - item.grant_found | bool
+  loop: "{{ check_oracle_object_privs | json_query('results[*].{objgrant:item,grant_found:stdout}') }}"

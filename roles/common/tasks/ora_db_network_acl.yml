@@ -1,0 +1,87 @@
+---
+- name: Check Oracle Database network ACE existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_network_acls a, dba_network_acl_privileges p
+     WHERE a.acl = p.acl
+       AND host = '{{ item.host }}' COLLATE binary_ci
+       AND lower_port = {{ item.lower_port }}
+       AND upper_port = {{ item.upper_port }}
+       AND privilege = '{{ item.privilege }}'
+       AND principal = '{{ item.principal }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_oracle_network_aces
+  loop: "{{ passed_list }}"
+
+- name: Add Oracle Database network ACE
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(
+          host => '{{ item.ace.host }}',
+          lower_port => {{ item.ace.lower_port }},
+          upper_port => {{ item.ace.upper_port }},
+          ace => xs$ace_type(privilege_list => xs$name_list('{{ item.ace.privilege }}'),
+                             principal_name => '{{ item.ace.principal }}',
+                             principal_type => xs_acl.ptype_db)
+        );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.ace.state | lower == "present"
+    - not item.grant_found | bool
+  loop: "{{ check_oracle_network_aces | json_query('results[*].{ace:item,grant_found:stdout}') }}"
+
+- name: Remove Oracle Database network ACE
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_NETWORK_ACL_ADMIN.REMOVE_HOST_ACE(
+          host => '{{ item.ace.host }}',
+          lower_port => {{ item.ace.lower_port }},
+          upper_port => {{ item.ace.upper_port }},
+          ace => xs$ace_type(privilege_list => xs$name_list('{{ item.ace.privilege }}'),
+                             principal_name => '{{ item.ace.principal }}',
+                             principal_type => xs_acl.ptype_db)
+        );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.ace.state | lower == "absent"
+    - item.grant_found | bool
+  loop: "{{ check_oracle_network_aces | json_query('results[*].{ace:item,grant_found:stdout}') }}"

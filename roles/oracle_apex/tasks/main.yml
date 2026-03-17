@@ -1,0 +1,43 @@
+---
+- name: Generate temporary password for main_user
+  set_fact:
+    main_user_pass: "{{ lookup('password', './apex.' + ansible_hostname + '.' + main_user + '.pwd', length=24) }}"
+
+- name: Download and stage APEX software
+  import_tasks: apex_software.yml
+
+- name: Create PDB for APEX
+  import_tasks: create_pdb.yml
+
+- name: Install APEX into PDB
+  import_tasks: apex_install.yml
+
+- name: Add the APEX main user to INTERNAL
+  include_tasks: "{{ include_task_file }}"
+  loop:
+    - "{{ playbook_dir }}/roles/common/tasks/apex_user.yml"
+    - "{{ playbook_dir }}/roles/common/tasks/apex_user_property.yml"
+  loop_control:
+    loop_var: include_task_file
+  vars:
+    passed_list: "{{ apex_users | default([]) | unique }}"
+
+- name: Add the APEX service profile
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_profile.yml"
+  vars:
+    passed_list: [{ profile_name: "{{ apex_profile }}", state: present }]
+
+- name: Add the APEX service profile limits
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_profile_limit.yml"
+  vars:
+    passed_list: "{{ apex_profile_limits | default([]) | unique }}"
+
+- name: Set APEX user properties
+  include_tasks: "{{ include_task_file }}"
+  loop:
+    - "{{ playbook_dir }}/roles/common/tasks/ora_db_user.yml"
+    - "{{ playbook_dir }}/roles/common/tasks/ora_db_user_property.yml"
+  loop_control:
+    loop_var: include_task_file
+  vars:
+    passed_list: "{{ apex_db_users | default([]) | unique }}"

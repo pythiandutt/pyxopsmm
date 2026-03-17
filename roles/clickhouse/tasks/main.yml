@@ -1,0 +1,91 @@
+---
+- name: Ensure ClickHouse group exists
+  group:
+    name: "{{ clickhouse_group }}"
+    state: present
+
+- name: Ensure ClickHouse user exists
+  user:
+    name: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    home: "/home/{{ clickhouse_user }}"
+    shell: /bin/bash
+    state: present
+
+- name: Create ClickHouse directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0755'
+  loop:
+    - "{{ clickhouse_base_dir }}"
+    - "{{ clickhouse_data_dir }}"
+    - "{{ clickhouse_log_dir }}"
+    - "{{ clickhouse_tmp_dir }}"
+
+- name: Download and unarchive ClickHouse binaries
+  unarchive:
+    src: "https://packages.clickhouse.com/tgz/lts/clickhouse-common-static-{{ clickhouse_version }}-amd64.tgz"
+    dest: "{{ clickhouse_base_dir }}/"
+    remote_src: yes
+    extra_opts: [--strip-components=1]
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+  args:
+    creates: "{{ clickhouse_base_dir }}/bin/clickhouse"
+
+- name: Install ClickHouse server binaries
+  unarchive:
+    src: "https://packages.clickhouse.com/tgz/lts/clickhouse-server-{{ clickhouse_version }}-amd64.tgz"
+    dest: "{{ clickhouse_base_dir }}/"
+    remote_src: yes
+    extra_opts: [--strip-components=1]
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+  args:
+    creates: "{{ clickhouse_base_dir }}/bin/clickhouse-server"
+
+- name: Install ClickHouse client binaries
+  unarchive:
+    src: "https://packages.clickhouse.com/tgz/lts/clickhouse-client-{{ clickhouse_version }}-amd64.tgz"
+    dest: "{{ clickhouse_base_dir }}/"
+    remote_src: yes
+    extra_opts: [--strip-components=1]
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+  args:
+    creates: "{{ clickhouse_base_dir }}/bin/clickhouse-client"
+
+- name: Template ClickHouse server config
+  template:
+    src: config.xml.j2
+    dest: "{{ clickhouse_base_dir }}/etc/clickhouse-server/config.xml"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0644'
+
+- name: Template ClickHouse user config
+  template:
+    src: templates/users.xml.j2
+    dest: "{{ clickhouse_base_dir }}/etc/clickhouse-server/users.xml"
+    owner: "{{ clickhouse_user }}"
+    group: "{{ clickhouse_group }}"
+    mode: '0644'
+
+- name: Setup systemd service for non-root user
+  template:
+    src: templates/clickhouse-server.service.j2
+    dest: "/etc/systemd/system/clickhouse-server.service"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd
+
+- name: Start and enable ClickHouse service
+  systemd:
+    name: clickhouse-server
+    state: started
+    enabled: yes
+    daemon_reload: yes

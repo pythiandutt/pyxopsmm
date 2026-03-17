@@ -1,0 +1,44 @@
+---
+- name: ({{ container_item }}) Check Oracle Database scheduler attribute
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_scheduler_global_attribute
+     WHERE attribute_name = '{{ item.attribute_name }}' COLLATE binary_ci
+       AND value = TO_CHAR('{{ item.attribute_value }}') COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_scheduler_attr
+  loop: "{{ passed_list }}"
+
+- name: ({{ container_item }}) Set Oracle Database scheduler attribute
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       DBMS_SCHEDULER.set_scheduler_attribute(
+          attribute  => '{{ item.attr.attribute_name }}',
+          value      => '{{ item.attr.attribute_value }}'
+       );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_item }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when:
+    - not item.attr_found | bool
+  loop: "{{ check_scheduler_attr | json_query('results[*].{attr:item,attr_found:stdout}') }}"

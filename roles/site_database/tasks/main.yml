@@ -1,0 +1,56 @@
+---
+- name: Add any site specific shell customizations
+  import_tasks: "site_shell_adjustments.yml"
+
+- name: Lookup the main_user temporary password
+  set_fact:
+    main_user_pass: "{{ lookup('file', './apex.' + ansible_hostname + '.' + main_user + '.pwd') }}"
+  ignore_errors: true
+  register: lookup_result
+
+- name: Generate temporary password for main_user if lookup not found
+  set_fact:
+    main_user_pass: "{{ lookup('password', './apex.' + ansible_hostname + '.' + main_user + '.pwd', length=24) }}"
+  when: lookup_result.failed
+
+- name: Setup site specific database schemas
+  include_role:
+    name: oracle_app_schema
+
+- name: Add AUDIT tablespace to root container
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_tablespace.yml"
+  vars:
+    container_name: CDB$ROOT
+    passed_list: [{ tbsp_name: "{{ site_db_audit_tablespace }}" , tbsp_size: 10m , autoextend_next: 10m , maxsize: 500m , tbsp_options: "DEFAULT TABLE COMPRESS FOR OLTP INDEX COMPRESS ADVANCED LOW" , state: present }]
+
+- name: General site specific customized database adjustments
+  include_tasks: "site_db_adjustments.yml"
+  loop:
+    - CDB$ROOT
+    - "{{ oracle_pdb_name }}"
+  loop_control:
+    loop_var: container_item
+
+- name: site specific DB audit configuration
+  include_tasks: "site_db_audit.yml"
+  loop:
+    - CDB$ROOT
+    - "{{ oracle_pdb_name }}"
+  loop_control:
+    loop_var: container_item
+
+- name: Adjust site specific specific database users
+  import_tasks: "site_user_adjustments.yml"
+
+- name: Configure site specific database email
+  import_tasks: "site_database_email.yml"
+
+- name: Configure the Oracle Scheduler for site specific
+  include_tasks: "site_scheduler_attributes.yml"
+  vars:
+    passed_list: "{{ ora_scheduler_attributes | default([]) | unique }}"
+  loop:
+    - CDB$ROOT
+    - "{{ oracle_pdb_name }}"
+  loop_control:
+    loop_var: container_item

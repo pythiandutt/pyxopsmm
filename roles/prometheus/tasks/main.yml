@@ -1,0 +1,16 @@
+---
+# Install prometheus
+- name: Install prometheus
+  include_tasks: install_prometheus.yml
+
+- name: Ensure prometheus service is started and enabled
+  systemd:
+    name: "{{ prometheus_systemd_service }}"
+    state: started
+    enabled: yes
+    daemon_reload: true
+
+- name: Restart nginx
+  systemd:
+    name: nginx
+    state: restarted

@@ -1,0 +1,21 @@
+---
+apex_admin_user: apex_temp_user
+
+apex_uri: https://download.oracle.com/otn_software/apex/apex-latest.zip
+# apex_uri: https://download.oracle.com/otn_software/apex/apex_24.2_en.zip
+
+apex_install_type: full  # Alternatively specify "runtime"
+apex_install_script: "{% if apex_install_type == 'runtime' %}apxrtins.sql{% else %}apexins.sql{% endif %}"
+
+apex_profile_limits:
+  - { profile_name: "{{ apex_profile }}" , resource_name: "PASSWORD_LIFE_TIME" , limit: "UNLIMITED" }
+
+apex_db_users:
+  - { user_name: "{{ apex_admin_user }}" , profile_name: ''                   , default_tbsp: ''                , temp_tbsp: '' , status: ''               , auth_type: ''                  , state: absent  }
+  - { user_name: APEX_PUBLIC_USER        , profile_name: "{{ apex_profile }}" , default_tbsp: "{{ apex_tbsp }}" , temp_tbsp: '' , status: 'ACCOUNT UNLOCK' , auth_type: 'NO AUTHENTICATION' , state: present }
+
+apex_tablespaces:
+  - { tbsp_name: "{{ apex_tbsp }}" , tbsp_size: 100m , autoextend_next: 50m , maxsize: 2000m , tbsp_options: "DEFAULT TABLE NOCOMPRESS INDEX NOCOMPRESS" , state: present }
+
+apex_users:
+  - { workspace_name: INTERNAL , user_name: "{{ main_user }}" , user_email: "{{ main_user_email }}" , user_pass: "{{ main_user_pass }}" , apex_role: admin, default_schema: "" , default_date_format: "{{ default_date_format }}" , state: present }

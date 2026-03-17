@@ -1,0 +1,27 @@
+[Unit]
+Description=Tomcat
+Requires=oracle-free-{{ oracle_db_release}}.service
+After=syslog.target network.target oracle-free-{{ oracle_db_release}}.service
+
+[Service]
+Type=forking
+
+User={{ webserver_user }}
+Group={{ webserver_group }}
+
+Environment=JAVA_HOME={{ tomcat_java_home }}
+Environment=CATALINA_HOME={{ webserver_home }}
+
+SyslogIdentifier=tomcat
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+WorkingDirectory={{ webserver_home }}
+
+ExecStart=env "JAVA_OPTS=-Dconfig.url={{ ords_config_dir }} {{ tomcat_jvm_memory }}" {{ webserver_home }}/bin/startup.sh
+ExecStop=env "JAVA_OPTS=-Dconfig.url={{ ords_config_dir }}" {{ webserver_home }}/bin/shutdown.sh
+
+[Install]
+WantedBy=default.target

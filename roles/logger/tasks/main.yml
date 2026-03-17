@@ -1,0 +1,33 @@
+---
+- name: Check if LOGGER is already installed and configured
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0 serveroutput ON
+    DECLARE
+       l_ver VARCHAR2(8) := null;
+       table_does_not_exist EXCEPTION;
+       PRAGMA EXCEPTION_INIT(table_does_not_exist, -942);
+    BEGIN
+       EXECUTE IMMEDIATE 'SELECT pref_value FROM {{ schema_name }}.logger_prefs WHERE pref_name = ''LOGGER_VERSION''' INTO l_ver;
+       DBMS_OUTPUT.PUT_LINE(l_ver);
+    EXCEPTION
+       WHEN table_does_not_exist then
+          DBMS_OUTPUT.PUT_LINE('0');
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_logger_version
+
+- name: Setup LOGGER database schema
+  include_role:
+    name: oracle_app_schema
+  when: check_logger_version.stdout is not search(software_version)

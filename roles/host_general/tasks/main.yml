@@ -1,0 +1,9 @@
+---
+- name: Validate OS
+  import_tasks: validate_target.yml
+
+- name: Install OS base packages
+  import_tasks: os_packages.yml
+
+- name: Harden other OS settings
+  import_tasks: os_hardening.yml

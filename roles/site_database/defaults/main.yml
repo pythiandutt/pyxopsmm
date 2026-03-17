@@ -1,0 +1,76 @@
+---
+site_db_audit_tablespace: audit_data
+site_db_audit_partition_interval: 28
+site_db_audit_partition_unit: DAY
+
+site_db_audit_ts_job: "{{ site_prefix }}_ADVANCE_AUD_TIMESTAMP_JOB"
+site_db_audit_ts_keep_days: 8
+site_db_audit_ts_start_hour: 02
+
+site_db_audit_purge_job: "{{ site_prefix }}_AUDIT_PURGE_JOB"
+site_db_audit_purge_interval_hours: 24
+site_db_audit_purge_start_hour: 02
+
+site_awr_interval_minutes: 60
+site_awr_retention_days: 8
+site_awr_window_days: 8
+
+site_optimizer_stats_retention_days: 8
+
+ora_scheduler_attributes:
+  - { attribute_name: default_timezone , attribute_value: "{{ server_timezone }}" }
+  - { attribute_name: email_sender     , attribute_value: "{{ smtp_sender_db }}"  }
+  - { attribute_name: email_server     , attribute_value: "{{ smtp_server }}"     }
+  - { attribute_name: log_history      , attribute_value: 8                       }
+
+ora_db_tablespaces:
+  - { tbsp_name: "{{ site_db_audit_tablespace }}" , tbsp_size: 100m , autoextend_next: 100m , maxsize: 500m , tbsp_options: "DEFAULT TABLE COMPRESS FOR OLTP INDEX COMPRESS ADVANCED LOW"  , state: present }
+  - { tbsp_name: "{{ site_prefix }}_utilities"    , tbsp_size: 10m  , autoextend_next: 10m  , maxsize: 100m , tbsp_options: "DEFAULT TABLE COMPRESS FOR OLTP INDEX COMPRESS ADVANCED HIGH" , state: present }
+  - { tbsp_name: users                            , tbsp_size: 10m  , autoextend_next: 10m  , maxsize: 100m , tbsp_options: "DEFAULT TABLE COMPRESS FOR OLTP INDEX COMPRESS ADVANCED HIGH" , state: present }
+
+ora_db_profiles:
+  - { profile_name: "{{ site_prefix }}_developer"       , state: present }
+
+ora_db_profile_limits:
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "CONNECT_TIME"           , limit: "540"       , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "IDLE_TIME"              , limit: "30"        , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "SESSIONS_PER_USER"      , limit: "3"         , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "FAILED_LOGIN_ATTEMPTS"  , limit: "4"         , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "INACTIVE_ACCOUNT_TIME"  , limit: "30"        , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "PASSWORD_ROLLOVER_TIME" , limit: "0"         , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "PASSWORD_GRACE_TIME"    , limit: "10"        , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "PASSWORD_LIFE_TIME"     , limit: "1095"      , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "PASSWORD_LOCK_TIME"     , limit: ".0415"     , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "PASSWORD_REUSE_MAX"     , limit: "UNLIMITED" , state: present }
+  - { profile_name: "{{ site_prefix }}_developer"       , resource_name: "PASSWORD_REUSE_TIME"    , limit: "1"         , state: present }
+
+
+ora_db_users:
+  - { user_name: "{{ main_user }}"  , profile_name: "{{ site_prefix }}_developer"       , default_tbsp: users         , temp_tbsp: '' , status: "ACCOUNT UNLOCK" , auth_type: ''                  , state: present }
+
+ora_db_quotas:
+  - { user_name: "{{ main_user }}"  , tbsp_quota: 104857600 , tbsp_name: users         }
+
+ora_db_roles:
+  - { role_name: "{{ site_prefix }}_developer"    , state: present }
+
+ora_db_role_privs:
+  - { role_name: apex_administrator_role       , grantee: "{{ main_user }}"  , grant_options: "" , state: present }
+  - { role_name: "{{ site_prefix }}_developer" , grantee: "{{ main_user }}"  , grant_options: "" , state: present }
+
+ora_db_system_privs:
+  - { sys_priv: "CREATE SESSION" , grantee: "{{ site_prefix }}_developer"    , grant_options: "" , state: present }
+
+ora_db_object_privs:
+  - { "V_$MYSTAT":                  { type: '' , owner: sys , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+  - { "V_$PARAMETER":               { type: '' , owner: sys , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+  - { "V_$SESSION":                 { type: '' , owner: sys , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+  - { "V_$SESSTAT":                 { type: '' , owner: sys , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+  - { "V_$SQL":                     { type: '' , owner: sys , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+  - { "V_$SQL_MONITOR":             { type: '' , owner: sys , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+  - { "V_$SQL_PLAN":                { type: '' , owner: sys , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+  - { "V_$SQL_PLAN_STATISTICS":     { type: '' , owner: sys , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+  - { "V_$SQL_PLAN_STATISTICS_ALL": { type: '' , owner: sys , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+  - { "V_$STATNAME":                { type: '' , owner: SYS , priv: select , grantee: "{{ site_prefix }}_developer" , grant_options: "" , state: present } }
+
+#ora_db_proxy_privs: []

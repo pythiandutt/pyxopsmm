@@ -1,0 +1,14 @@
+---
+- name: Enable firewalld service
+  service:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: Open firewalld ports for Oracle Database
+  firewalld:
+    zone: public
+    port: "{{ oracle_listener_port }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled

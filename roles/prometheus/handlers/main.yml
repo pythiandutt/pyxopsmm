@@ -1,0 +1,8 @@
+# For prometheus restart 
+- name: Restart prometheus
+  listen: restart_prometheus
+  become: true
+  become_user: root
+  systemd:
+    name: "{{ prometheus_systemd_service }}"
+    state: restarted

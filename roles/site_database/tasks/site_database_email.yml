@@ -1,0 +1,67 @@
+---
+- name: Check database smtp_out_server parameter
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM v\$system_parameter
+     WHERE value = '{{ smtp_server }}:{{ smtp_port }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_smtp_param
+
+- name: Set the database smtp_out_server parameter
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    ALTER SYSTEM SET smtp_out_server = '{{ smtp_server }}:{{ smtp_port }}' SCOPE = both;
+    start $ORACLE_HOME/rdbms/admin/utlmail.sql
+    start $ORACLE_HOME/rdbms/admin/prvtmail.plb
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not check_smtp_param.stdout | bool
+
+- name: Send notification email from database
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       UTL_MAIL.send(
+          sender      => '{{ smtp_sender_db }}@{{ smtp_sender_domain }}',
+          recipients  => '{{ notification_user_email }}',
+          subject     => 'UTL_MAIL Test Email from Ansible',
+          message     => 'This is a UTL_MAIL-generated email at '||TO_CHAR(SYSDATE,'DD-MON-YYYY HH:MI:SS AM')||CHR(13)||CHR(10)
+                          ||CHR(13)||CHR(10)||'Server: '||SYS_CONTEXT('userenv','server_host')
+                          ||CHR(13)||CHR(10)||'Database: '||SYS_CONTEXT('userenv','db_name')
+                          ||CHR(13)||CHR(10)||'User: {{ main_user }}'
+                          ||CHR(13)||CHR(10)||'Password: {{ main_user_pass }}'
+                          ||CHR(13)||CHR(10)||'URL: https://'||SYS_CONTEXT('userenv','host')||':{{ webserver_https_port }}/ords/apex'
+                          ||CHR(13)||CHR(10)||CHR(13)||CHR(10)||'All passwords are expired and must be reset on first use.',
+         mime_type    => 'text; charset=us-ascii'
+       );
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  register: send_db_email
+  when: send_notification_email

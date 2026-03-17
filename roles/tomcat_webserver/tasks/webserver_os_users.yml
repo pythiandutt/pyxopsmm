@@ -1,0 +1,13 @@
+---
+- name: Add Webserver OS group
+  group:
+    name: "{{ webserver_group }}"
+    state: present
+
+- name: Add Webserver OS user
+  user:
+    name: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    home: "{{ webserver_home }}"
+    shell: "{{ webserver_shell }}"
+    createhome: false

@@ -1,0 +1,14 @@
+- name: List the required Grafana plugins
+  debug:
+    msg: "Required Grafana plugins: {{ grafana_plugins }}"
+
+- name: Install Grafana plugins
+  shell: |
+    {{ grafana_install_dir }}/bin/grafana cli \
+    --config {{ grafana_install_dir }}/conf/grafana.ini \
+    --homepath {{ grafana_install_dir }} \
+    --pluginsDir {{ grafana_install_dir }}/conf/provisioning/plugins \
+    plugins install {{ item }}
+  loop: "{{ grafana_plugins }}"
+  become: yes
+  become_user: "{{ grafana_user }}"

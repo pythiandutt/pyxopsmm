@@ -1,0 +1,12 @@
+---
+- name: Install clickhouse
+  hosts: all
+  gather_facts: true
+  become: true
+  become_user: root
+  tasks:
+    - include_vars: ./vault.yml
+    - name: Install and Configure clickhouse on the host server
+      include_role:
+        name: clickhouse
+        tasks_from: main.yml

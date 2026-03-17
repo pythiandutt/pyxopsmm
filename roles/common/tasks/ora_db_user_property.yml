@@ -1,0 +1,49 @@
+---
+- name: Check Oracle Database user property
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_users
+     WHERE username = '{{ item.user_name }}' COLLATE binary_ci
+       AND profile = DECODE('{{ item.profile_name }}','',profile,'{{ item.profile_name | upper }}') COLLATE binary_ci
+       AND account_status = DECODE('{{ item.status | upper }}','',account_status,'ACCOUNT UNLOCK','OPEN','ACCOUNT LOCK','LOCKED','EXPIRE','EXPIRED','{{ item.status | upper }}')
+       AND authentication_type = DECODE('{{ item.auth_type | upper }}','',authentication_type,'NO AUTHENTICATION','NONE','{{ item.auth_type | upper }}')
+       AND default_tablespace = DECODE('{{ item.default_tbsp }}','',default_tablespace,'{{ item.default_tbsp }}') COLLATE binary_ci
+       AND temporary_tablespace = DECODE('{{ item.temp_tbsp }}','',temporary_tablespace,'{{ item.temp_tbsp | upper }}') COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_oracle_users
+  loop: "{{ passed_list }}"
+
+- name: Alter Oracle Database user property
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    ALTER USER {{ item.user.user_name }} {{ item.user.status }} {{ item.user.auth_type }}
+    PROFILE {{ item.user.profile_name | default('DEFAULT', true) }}
+    DEFAULT TABLESPACE {{ item.user.default_tbsp }} TEMPORARY TABLESPACE {{ item.user.temp_tbsp | default('TEMP', true) }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.user.state | lower == "present"
+    - not item.property_set | bool
+  loop: "{{ check_oracle_users | json_query('results[*].{user:item,property_set:stdout}') }}"

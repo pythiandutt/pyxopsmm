@@ -1,0 +1,65 @@
+---
+- name: Verify whether the ORDS pool.xml file exists
+  stat:
+    path: "{{ ords_config_dir }}/databases/default/pool.xml"
+  register: file_status
+
+- name: Create the ORDS config directory
+  file:
+    path: "{{ ords_config_dir }}"
+    state: directory
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_install_group }}"
+    mode: "u=rwx,g=rwx,o="
+
+- name: Create ORDS install user
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_user.yml"
+  vars:
+    passed_list: [{ user_name: "{{ ords_install_admin_user }}", default_tbsp: APEX , state: present }]
+
+- name: Create ORDS install user password
+  set_fact:
+    ords_install_user_pass: "{{ lookup('password', '/dev/null length=24 chars=ascii_letters') }}"
+  when: not file_status.stat.exists
+
+- name: Adjust ORDS install user and run privileges script
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    ALTER USER {{ ords_install_admin_user }} IDENTIFIED BY "{{ ords_install_user_pass }}" ACCOUNT UNLOCK;
+    START {{ oracle_base }}/ords/scripts/installer/ords_installer_privileges.sql {{ ords_install_admin_user }}
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  register: alter_ords_user
+  when: not file_status.stat.exists
+
+- name: Install ORDS
+  shell: |
+    set -o pipefail
+    ords --config {{ ords_config_dir }} install                            \
+      --admin-user {{ ords_install_admin_user }}                           \
+      --proxy-user                                                         \
+      --proxy-user-tablespace {{ ords_tbsp }}                              \
+      --proxy-user-temp-tablespace {{ temp_tbsp | default('TEMP', true) }} \
+      --schema-tablespace {{ ords_tbsp }}                                  \
+      --schema-temp-tablespace {{ temp_tbsp | default('TEMP', true) }}     \
+      --db-hostname $(hostname)                                            \
+      --db-port 1521                                                       \
+      --db-servicename {{ oracle_pdb_name }}                               \
+      --password-stdin <<-END_HEREDOC
+    {{ ords_install_user_pass }}
+    {{ ords_install_user_pass }}
+    END_HEREDOC
+  environment:
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin"
+  register: ords_installation
+  failed_when: ords_installation.stdout is search("ORA-")
+  when: not file_status.stat.exists

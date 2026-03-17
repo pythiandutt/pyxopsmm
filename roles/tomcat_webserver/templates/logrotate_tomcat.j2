@@ -1,0 +1,10 @@
+{{ log_dirs }} {
+    su {{ webserver_user }} {{ webserver_group }}
+    compress
+    copytruncate
+    daily
+    missingok
+    notifempty
+    rotate {{ log_days_to_keep }}
+    size {{ log_size_before_rotate }}
+}

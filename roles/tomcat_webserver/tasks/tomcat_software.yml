@@ -1,0 +1,64 @@
+---
+- name: Install Tomcat related packages
+  dnf:
+    name: "{{ tomcat_prerequisite_pkgs }}"
+    state: present
+    lock_timeout: "{{ dnf_lock_timeout }}"
+
+- name: Search to see if Tomcat is already installed
+  find:
+    paths: "{{ webserver_base }}"
+    patterns: "apache-tomcat-9.*"
+    recurse: true
+    file_type: directory
+  register: catalina_find_result
+
+- name: Link existing Tomcat directory
+  file:
+    src: "{{ catalina_find_result.files[0].path }}"
+    dest: "{{ webserver_home }}"
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    state: link
+    follow: false
+  when: catalina_find_result.matched > 0
+
+- name: Download and stage the Tomcat software
+  unarchive:
+    src: "{{ tomcat_uri }}"
+    dest: "{{ webserver_base }}"
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    mode: "u=rwx,go=rx"
+    remote_src: true
+    list_files: true
+  when: catalina_find_result.matched == 0
+  register: archive_contents
+
+- name: Link created Tomcat directory
+  file:
+    src: "{{ webserver_base }}/{{ archive_contents.files[0].split('/')[0] }}"
+    dest: "{{ webserver_home }}"
+    owner: "{{ webserver_user }}"
+    group: "{{ webserver_group }}"
+    state: link
+    follow: false
+  when:
+    - archive_contents.files is defined
+    - archive_contents.changed
+
+- name: Create the webserver document root images directory
+  file:
+    path: "{{ webserver_document_root }}/i"
+    owner: "root"
+    group: "root"
+    state: directory
+    mode: "u=rwx,go=rx"
+
+- name: Setup logrotate for Tomcat
+  template:
+    dest: "/etc/logrotate.d/tomcat"
+    src: "logrotate_tomcat.j2"
+    owner: "root"
+    group: "root"
+    mode: "u=rw,go=r"

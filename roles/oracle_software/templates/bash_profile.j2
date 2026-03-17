@@ -1,0 +1,10 @@
+export CLICOLOR=1
+export TERM=xterm-256color
+export PS1='[\[\033[01;32m\]\u@\h\[\033[00m\]${ORACLE_SID+:\[\e[7m\] }${ORACLE_SID:-}${ORACLE_SID+ \[\e[27m\]}\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]]$ '
+shopt -u direxpand
+export ORACLE_BASE={{ oracle_base }}
+export ORACLE_SID={{ oracle_sid }}
+export ORACLE_HOME={{ oracle_home }}
+export PATH=${ORACLE_HOME}/bin:${PATH}
+export JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8
+export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))

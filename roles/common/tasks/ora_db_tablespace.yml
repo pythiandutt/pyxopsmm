@@ -1,0 +1,64 @@
+---
+- name: Check Oracle Database tablespace existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_tablespaces
+     WHERE tablespace_name = '{{ item.tbsp_name }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_oracle_tablespaces
+  loop: "{{ passed_list }}"
+
+- name: Add Oracle Database tablespace
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    CREATE {{ tablespace_type }} TABLESPACE {{ item.tbsp.tbsp_name }} DATAFILE SIZE {{ item.tbsp.tbsp_size }}
+    AUTOEXTEND ON NEXT {{ item.tbsp.autoextend_next }} MAXSIZE {{ item.tbsp.maxsize }}
+    {{ item.tbsp.tbsp_options }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.tbsp.state | lower == "present"
+    - not item.tablespace_found | bool
+  loop: "{{ check_oracle_tablespaces | json_query('results[*].{tbsp:item,tablespace_found:stdout}') }}"
+
+- name: Remove Oracle Database tablespace
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    DROP TABLESPACE {{ item.tbsp.tbsp_name }} INCLUDING CONTENTS AND DATAFILES;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ container_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.tbsp.state | lower == "absent"
+    - item.tablespace_found | bool
+  loop: "{{ check_oracle_tablespaces | json_query('results[*].{tbsp:item,tablespace_found:stdout}') }}"

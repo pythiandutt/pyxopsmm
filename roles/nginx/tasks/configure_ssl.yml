@@ -1,0 +1,46 @@
+- name: Create SSL directory
+  file:
+    path: "{{ nginx_home }}/ssl"
+    state: directory
+    mode: '0755'
+ 
+- name: Generate private key
+  command: openssl genrsa -out {{ ssl_key_path }} 2048
+  args:
+    creates: "{{ ssl_key_path }}"
+
+- name: Generate self-signed certificate
+  command: >
+    openssl req -x509 -new -nodes
+    -key {{ ssl_key_path }}
+    -sha256 -days 365
+    -out {{ ssl_cert_path }}
+    -subj "/C=AU/ST=QLD/L=Brisbane/O=MyCompany/OU=IT/CN={{ domain_name }}"
+  args:
+    creates: "{{ ssl_cert_path }}"
+
+# - name: Configure nginx SSL
+#   copy:
+#     dest: "{{ nginx_conf_path }}"
+#     content: |
+#       server {
+#           listen {{ nginx_http_port }};
+#           server_name {{ domain_name }};
+#           return 301 https://$host$request_uri;
+#       }
+
+#       server {
+#           listen {{ nginx_https_port }} ssl;
+#           server_name {{ domain_name }};
+
+#           ssl_certificate {{ ssl_cert_path }};
+#           ssl_certificate_key {{ ssl_key_path }};
+
+#           ssl_protocols TLSv1.2 TLSv1.3;
+#           ssl_ciphers HIGH:!aNULL:!MD5;
+
+#           location / {
+#               root {{ nginx_document_root }};
+#               index index.html;
+#           }
+#       }

@@ -1,0 +1,42 @@
+---
+- name: Check Oracle Database tablespace quota existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM dba_ts_quotas
+     WHERE username = '{{ item.user_name }}' COLLATE binary_ci
+       AND DECODE(max_bytes,-1,'unlimited',max_bytes) = '{{ item.tbsp_quota }}' COLLATE binary_ci
+       AND tablespace_name = '{{ item.tbsp_name }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_tablespace_quotas
+  loop: "{{ passed_list }}"
+
+- name: Add Oracle Database tablespace quota
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    ALTER USER {{ item.quota.user_name }} QUOTA {{ item.quota.tbsp_quota }} ON {{ item.quota.tbsp_name }};
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when: not item.quota_found | bool
+  loop: "{{ check_tablespace_quotas | json_query('results[*].{quota:item,quota_found:stdout}') }}"

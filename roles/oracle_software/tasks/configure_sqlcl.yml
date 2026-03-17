@@ -1,0 +1,43 @@
+---
+- name: Verify file status of SQLcl login.sql file
+  stat:
+    path: "{{ sqlcl_home }}/login.sql"
+  register: file_status
+
+- name: (check_mode) Configure SQLcl login.sql
+  blockinfile:
+    path: "{{ sqlcl_home }}/login.sql"
+    block: "{{ lookup('file', 'login.sql') }}"
+    marker: "-- {mark} oracle-database-23-free ANSIBLE MANAGED BLOCK"
+    create: true
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_install_group }}"
+    mode: "u=rw,go="
+  check_mode: true
+  register: block_check
+
+- name: Un-protect SQLcl login.sql to update
+  file:
+    path: "{{ sqlcl_home }}/login.sql"
+    attributes: "-i"
+  when:
+    - file_status.stat.attr_flags is defined
+    - file_status.stat.attr_flags is search("i")
+    - block_check.changed
+
+- name: Configure SQLcl login.sql
+  blockinfile:
+    path: "{{ sqlcl_home }}/login.sql"
+    block: "{{ lookup('file', 'login.sql') }}"
+    marker: "-- {mark} oracle-database-23-free ANSIBLE MANAGED BLOCK"
+    create: true
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_install_group }}"
+    mode: "u=rw,go="
+  when: block_check.changed
+
+- name: Protect SQLcl login.sql after update
+  file:
+    path: "{{ sqlcl_home }}/login.sql"
+    attributes: "+i"
+  when: block_check.changed

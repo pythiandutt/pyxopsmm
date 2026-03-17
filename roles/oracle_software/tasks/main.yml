@@ -1,0 +1,12 @@
+---
+- name: Install {{ oracle_db_release }} Free via RPM
+  import_tasks: rpm_install.yml
+
+- name: Configure shell
+  import_tasks: configure_shell.yml
+
+- name: Configure supporting files
+  import_tasks: configure_files.yml
+
+- name: Configure SQLcl
+  import_tasks: configure_sqlcl.yml

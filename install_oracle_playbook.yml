@@ -1,0 +1,17 @@
+---
+- name: Server preparation and Database creation steps
+  hosts: all
+  gather_facts: true
+  become: true
+  become_user: root
+  tasks:
+    - name: Server configuration roles
+      include_role:
+        name: "{{ role_list }}"
+      loop:
+        - "host_general"
+        - "oracle_server"
+        - "oracle_software"
+        - "oracle_database"
+      loop_control:
+        loop_var: role_list

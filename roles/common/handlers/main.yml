@@ -1,0 +1,23 @@
+---
+- name: Restart Tomcat
+  listen: restart_tomcat
+  become: true
+  become_user: root
+  service:
+    name: tomcat.service
+    state: restarted
+
+- name: Wait for Tomcat to restart
+  listen: restart_tomcat
+  wait_for:
+    port: "{{ webserver_https_port }}"
+    delay: "{{ webserver_restart_delay }}"
+
+- name: Restart server
+  listen: reboot_server
+  become: true
+  become_user: root
+  reboot:
+    msg: "Reboot initiated by Ansible"
+    reboot_timeout: "{{ reboot_timeout }}"
+  when: run_reboot_handler

@@ -1,0 +1,134 @@
+---
+- name: Check that the database is actually running (within the service)
+  shell: "set -o pipefail; ps -ef | ( grep [d]b_smon_FREE || true ) | wc -l"
+  changed_when: false
+  register: database_found_check
+
+- name: Create the database using DBCA
+  shell: |
+    set -o pipefail
+    {{ oracle_home }}/bin/dbca -silent                            \
+      -createDatabase                                             \
+      -gdbName {{ oracle_sid }}                                   \
+      -templateName FREE_Database.dbc                             \
+      -characterSet {{ db_character_set }}                        \
+      -nationalCharacterSet {{ db_nls_character_set }}            \
+      -createAsContainerDatabase TRUE                             \
+      -sid {{ oracle_sid }}                                       \
+      -emConfiguration NONE                                       \
+      -J-Doracle.assistants.dbca.validate.DBCredentials=false     \
+      -skipDatapatch TRUE                                         \
+      -sampleSchema FALSE                                         \
+      -initParams {{ db_init_params }}                            \
+      -storageType FS                                             \
+      -datafileDestination {{ db_data_file_dest }}                \
+      -useOMF TRUE                                                \
+      -enableArchive {{ db_archive_mode }}                        \
+      -systemPassword $(tr -dc A-Za-z </dev/urandom | head -c 32) \
+      -sysPassword $(tr -dc A-Za-z </dev/urandom | head -c 32)    \
+      -recoveryAreaDestination {{ db_recovery_dest }}             \
+      -recoveryAreaSize {{ db_recovery_size }}                    \
+      -redoLogFileSize {{ db_redo_log_size }}
+  become: true
+  become_user: "{{ oracle_user }}"
+  register: database_create_output
+  when: database_found_check.stdout == "0"
+
+- name: Enable database service
+  systemd:
+    state: started
+    enabled: true
+    daemon_reload: true
+    name: "{{ db_systemd_service }}"
+
+- name: Check the CDB$ROOT dbtimezone
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} >/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading OFF trim ON tab OFF pagesize 0
+    SELECT dbtimezone FROM dual;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: cdbroot_dbtimezone
+
+- name: Set the CDB$ROOT dbtimezone to match the server timezone
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    ALTER DATABASE SET time_zone='{{ server_timezone }}';
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  register: set_cdbroot_dbtimezone
+  when: cdbroot_dbtimezone.stdout != server_timezone
+
+- name: Check the PDB$SEED dbtimezone
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} >/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading OFF trim ON tab OFF pagesize 0
+    SELECT dbtimezone FROM dual;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: PDB$SEED
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: pdbseed_dbtimezone
+
+- name: Set the PDB$SEED dbtimezone to match the server timezone
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    ALTER PLUGGABLE DATABASE pdb\$seed CLOSE;
+    ALTER PLUGGABLE DATABASE pdb\$seed OPEN READ WRITE;
+    ALTER SESSION SET container = pdb\$seed;
+    ALTER DATABASE SET time_zone='{{ server_timezone }}';
+    ALTER PLUGGABLE DATABASE pdb\$seed CLOSE;
+    ALTER PLUGGABLE DATABASE pdb\$seed OPEN READ ONLY;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  register: set_pdbseed_dbtimezone
+  when: pdbseed_dbtimezone.stdout != server_timezone
+
+- name: Restart DB service (must do immediately)
+  service:
+    name: "{{ db_systemd_service }}"
+    state: restarted
+  when: set_cdbroot_dbtimezone.changed or set_pdbseed_dbtimezone.changed
+
+- name: Add post-DBCA sqlnet.ora recommendations
+  blockinfile:
+    path: "{{ oracle_home }}/network/admin/sqlnet.ora"
+    block: "{{ lookup('file', 'sqlnet.ora') }}"
+    marker: "-- {mark} oracle-database-23-free ANSIBLE MANAGED BLOCK"
+    create: true
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_install_group }}"
+    mode: "u=rw,go="

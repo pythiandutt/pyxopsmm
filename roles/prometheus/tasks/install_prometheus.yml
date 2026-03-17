@@ -1,0 +1,104 @@
+---
+- name: Create Prometheus group
+  group:
+    name: "{{ prometheus_group }}"
+    state: present
+
+- name: Create Prometheus user
+  user:
+    name: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    create_home: no
+    shell: /sbin/nologin
+    state: present
+
+- name: Create Prometheus directories
+  file:   
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: '0755'
+  with_items:
+    - "{{ prometheus_dirs }}"
+
+- name: Install prerequisite packages
+  dnf:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ prometheus_prereq_pkgs }}"
+
+- name: Download Prometheus and Verify Checksum
+  get_url:
+    url: "{{ prometheus_wget_url}}"
+    dest: "{{ prometheus_stage }}/{{ prometheus_file_name }}"
+    checksum: "{{ prometheus_checksum }}"
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: '0644'
+
+- set_fact:
+    folder_name: "{{ prometheus_file_name | replace('.tar.gz', '') }}"
+
+- name: Extract Prometheus binary
+  unarchive:
+    src: "{{ prometheus_stage }}/{{ prometheus_file_name }}"
+    dest: "{{ prometheus_stage }}"
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    remote_src: yes
+
+- name: Copy prometheus binary to /usr/local/bin/
+  copy:
+    src: "{{ prometheus_stage }}/{{ folder_name }}/prometheus"
+    dest: "/usr/local/bin/prometheus"
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: '0755'
+    remote_src: yes
+
+- name: Copy promtool binary to /usr/local/bin/
+  copy:
+    src: "{{ prometheus_stage }}/{{ folder_name }}/promtool"
+    dest: "/usr/local/bin/promtool"
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: '0755'
+    remote_src: yes
+ 
+- name: Render prometheus configuration file
+  template:
+    src: "prometheus.yml.j2"
+    dest: "/etc/prometheus/prometheus.yml"
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: '0644'
+
+- name: Render Prometheus proxy configuration file in nginx
+  template:
+    src: "prometheus.conf.j2"
+    dest: "{{ nginx_conf_dir }}/prometheus.conf"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Create .htpasswd file for basic authentication
+  command: "htpasswd -cb /etc/nginx/.htpasswd {{ prometheus_admin_user }} {{ prometheus_admin_password }}"
+  args:
+    creates: "/etc/nginx/.htpasswd"
+
+- name: Render prometheus systemd service file
+  template:
+    src: "prometheus.service.j2"
+    dest: "/etc/systemd/system/{{ prometheus_systemd_service }}"
+    owner: root
+    group: root
+    mode: '0644'
+
+# - name: Setup logrotate for prometheus
+#   template:
+#     dest: "/etc/logrotate.d/prometheus"
+#     src: "logrotate_prometheus.j2"
+#     owner: "root"
+#     group: "root"
+#     mode: "u=rw,go=r"

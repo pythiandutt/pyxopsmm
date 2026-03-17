@@ -1,0 +1,14 @@
+---
+- name: Server steps run as "root"
+  hosts: all
+  gather_facts: true
+  become: true
+  become_user: root
+  tasks:
+    - name: APEX related patching roles
+      include_role:
+        name: "{{ role_list }}"
+      loop:
+        - "oracle_apex_patch"
+      loop_control:
+        loop_var: role_list

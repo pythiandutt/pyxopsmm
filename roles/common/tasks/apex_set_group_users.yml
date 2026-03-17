@@ -1,0 +1,102 @@
+---
+- name: Check APEX user to group assignment existence
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+      FROM apex_workspace_group_users
+     WHERE workspace_name = '{{ item.workspace_name }}' COLLATE binary_ci
+       AND user_name = '{{ item.user_name }}' COLLATE binary_ci
+       AND group_name = '{{ item.granted_group }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_apex_group_user
+  loop: "{{ passed_list }}"
+  loop_control:
+    label: "{{ item.workspace_name }},{{ item.user_name }},{{ item.granted_group }}"
+
+- name: Add APEX user to group assignment
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    DECLARE
+       l_group_list     apex_t_varchar2;
+    BEGIN
+       l_group_list := apex_t_varchar2();
+       SELECT group_name BULK COLLECT INTO l_group_list
+         FROM apex_workspace_group_users
+        WHERE workspace_name = '{{ item.wksp.workspace_name }}' COLLATE binary_ci
+          AND user_name = '{{ item.wksp.user_name }}' COLLATE binary_ci;
+       APEX_STRING.push(l_group_list, '{{ item.wksp.granted_group }}');
+       APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(p_workspace=>'{{ item.wksp.workspace_name }}'));
+       APEX_UTIL.set_group_user_grants(
+          p_user_name => '{{ item.wksp.user_name }}',
+          p_granted_group_names => l_group_list
+       );
+       commit;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.wksp.state | lower == "present"
+    - item.assignment_found is search("FALSE")
+  loop: "{{ check_apex_group_user | json_query('results[*].{wksp:item,assignment_found:stdout}') }}"
+  loop_control:
+    label: "{{ item.wksp.workspace_name }},{{ item.wksp.user_name }},{{ item.wksp.granted_group }}"
+
+- name: Remove APEX user to group assignment
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    DECLARE
+       l_group_list     apex_t_varchar2;
+    BEGIN
+       l_group_list := apex_t_varchar2();
+       SELECT group_name BULK COLLECT INTO l_group_list
+         FROM apex_workspace_group_users
+        WHERE workspace_name = '{{ item.wksp.workspace_name }}' COLLATE binary_ci
+          AND user_name = '{{ item.wksp.user_name }}' COLLATE binary_ci
+          AND group_name != '{{ item.wksp.granted_group }}' COLLATE binary_ci;
+       APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(p_workspace=>'{{ item.wksp.workspace_name }}'));
+       APEX_UTIL.set_group_user_grants(
+          p_user_name => '{{ item.wksp.user_name }}',
+          p_granted_group_names => l_group_list
+       );
+       commit;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.wksp.state | lower == "absent"
+    - item.assignment_found is search("TRUE")
+  loop: "{{ check_apex_group_user | json_query('results[*].{wksp:item,assignment_found:stdout}') }}"
+  loop_control:
+    label: "{{ item.wksp.workspace_name }},{{ item.wksp.user_name }},{{ item.wksp.granted_group }}"

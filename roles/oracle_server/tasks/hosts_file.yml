@@ -1,0 +1,7 @@
+---
+- name: Configure the local hosts file
+  lineinfile:
+    path: /etc/hosts
+    regexp: ".*{{ ansible_fqdn }}$"
+    line: "{{ etc_hosts_ip }} {{ ansible_fqdn }} {{ ansible_hostname }}"
+    state: present

@@ -1,0 +1,5 @@
+---
+os_family_supported: "RedHat"
+os_min_supported_version: "8.6"
+# os_supported_architecture: "aarch64"
+os_supported_architecture: "x86_64"

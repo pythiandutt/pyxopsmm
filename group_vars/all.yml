@@ -1,0 +1,5 @@
+---
+oracle_user: oracle
+ords_install: true
+webserver_install: true
+database_actions: false

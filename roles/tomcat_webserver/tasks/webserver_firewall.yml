@@ -1,0 +1,14 @@
+---
+- name: Enable firewalld service
+  service:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: Open firewalld ports for HTTPS
+  firewalld:
+    zone: public
+    port: "{{ webserver_https_port }}/tcp"
+    permanent: true
+    immediate: true
+    state: enabled

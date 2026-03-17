@@ -1,0 +1,27 @@
+---
+# Defining default variables for nginx. 
+# These variables can be overridden in the inventory or playbook as needed.
+nginx_user: root
+nginx_group: root
+nginx_base: /u01
+nginx_home: "{{ nginx_base }}/nginx"
+nginx_document_root: "{{ nginx_base }}/www/html"
+nginx_http_port: 80
+nginx_https_port: 443
+nginx_port: 443
+nginx_restart_delay: 5
+nginx_systemd_service: nginx.service
+nginx_conf_path: "{{ nginx_home }}/ssl/ssl.conf"
+ssl_cert_path: "{{ nginx_home }}/ssl/nginx-selfsigned.crt"
+ssl_key_path: "{{ nginx_home }}/ssl/nginx-selfsigned.key"
+domain_name: "{{ inventory_hostname }}"
+nginx_prereq_pkgs:
+  - openssl
+  - tmux
+  - vim
+
+# log rotation settings
+log_days_to_keep: 15
+log_size_before_rotate: 10M
+log_dir: "{{ nginx_home }}/logs"
+log_mode: debug

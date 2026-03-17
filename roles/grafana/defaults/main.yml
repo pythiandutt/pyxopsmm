@@ -1,0 +1,85 @@
+---
+# Defining default variables for grafana. 
+# These variables can be overridden in the inventory or playbook as needed.
+grafana_user: grafana
+grafana_group: grafana
+grafana_base: /u01
+grafana_stage: "{{ grafana_base }}/grafana"
+grafana_home: "{{ grafana_base }}/grafana"
+grafana_http_port: 3000
+grafana_interface: "0.0.0.0"
+grafana_domain: localhost
+grafana_root_url: "https://{{ grafana_domain }}/grafana/"
+grafana_systemd_service: grafana.service
+grafana_wget_url: "https://dl.grafana.com/grafana-enterprise/release/12.4.0/grafana-enterprise_12.4.0_22325204712_linux_amd64.tar.gz"
+grafana_checksum: "sha256:36c31f54ae0236cc49aec608ac4b9f09d15b0b67b3af27a3d8d153e15ed17300"
+grafana_file_name: "grafana-enterprise_12.4.0_22325204712_linux_amd64.tar.gz"
+grafana_version: "12.4.0"
+nginx_conf_dir: /etc/nginx/default.d
+grafana_install_dir: "/usr/local/grafana"
+grafana_provisioning_dir: "conf/provisioning"
+grafana_plugins_dir: "{{ grafana_install_dir }}/{{ grafana_provisioning_dir }}/plugins"
+
+grafana_plugins:
+  - "grafana-clickhouse-datasource"
+  - "oci-logs-datasource"
+  - "grafana-piechart-panel"
+  - "grafana-worldmap-panel"
+  - "grafana-clock-panel"
+  - "grafana-simple-json-datasource"
+
+grafana_prereq_pkgs:
+  - wget
+
+# Security settings
+grafana_disable_gravatar: true
+grafana_allow_sign_up: false
+grafana_anonymous_enabled: false
+grafana_anonymous_org_role: "Viewer"
+grafana_smtp_enabled: false
+grafana_smtp_host: ""
+grafana_smtp_user: ""
+grafana_smtp_password: ""
+grafana_smtp_from_address: "admin@{{ grafana_domain }}"
+grafana_smtp_from_name: "Grafana Admin"
+
+# Database settings (default: sqlite3)
+grafana_database_type: "sqlite3"
+grafana_database_host: ""
+grafana_database_name: "grafana"
+grafana_database_user: ""
+grafana_database_password: ""
+
+#Datasources to provision
+grafana_datasources:
+  - name: prometheus
+    type: prometheus
+    access: proxy
+    url: http://localhost:9090
+    is_default: true
+    editable: false
+    basic_auth: true
+    basic_auth_user: "{{ prometheus_ds_auth_user }}"
+    basic_auth_password: "{{ prometheus_ds_auth_pass }}"
+  - name: clickhouse
+    type: grafana-clickhouse-datasource
+    is_default: false
+    editable: true
+    basic_auth_password: "{{ ch_ds_auth_pass }}"
+    json_data:
+      defaultDatabase: "default"
+      tlsSkipVerify: true
+      port: 9000
+      host: localhost
+      username: "{{ ch_ds_auth_user }}"
+      protocol: "native"
+
+# log rotation settings
+grafana_log_mode: "console file"
+grafana_log_level: "info"
+grafana_log_dir: "{{ grafana_home }}/logs"
+
+# For logrotate settings
+log_days_to_keep: 15
+log_size_before_rotate: 10M
+log_mode: debug

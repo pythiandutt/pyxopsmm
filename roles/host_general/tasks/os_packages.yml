@@ -1,0 +1,10 @@
+---
+- name: Install required and recommended packages
+  dnf:
+    name: "{{ base_packages }}"
+    state: present
+    lock_timeout: "{{ dnf_lock_timeout }}"
+
+- name: Set timezone
+  timezone:
+    name: "{{ server_timezone }}"

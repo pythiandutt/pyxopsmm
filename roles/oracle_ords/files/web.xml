@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app
+    metadata-complete="true"
+    version="3.1"
+    id="ORDS"
+    xmlns="http://xmlns.jcp.org/xml/ns/javaee"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd">
+    <display-name>Oracle REST Data Services</display-name>
+
+    <context-param>
+        <param-name>version</param-name>
+        <param-value>23.2.2.r2081534</param-value>
+    </context-param>
+
+    <listener>
+        <listener-class>oracle.dbtools.entrypoint.WebApplicationEntryPoint</listener-class>
+    </listener>
+
+    <servlet>
+        <description>
+        </description>
+        <display-name>HttpEndPoint</display-name>
+        <servlet-name>HttpEndPoint</servlet-name>
+        <servlet-class>oracle.dbtools.entrypoint.WebApplicationRequestEntryPoint</servlet-class>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>HttpEndPoint</servlet-name>
+        <url-pattern>/*</url-pattern>
+    </servlet-mapping>
+
+    <servlet>
+        <description>
+        </description>
+        <display-name>Forbidden</display-name>
+        <servlet-name>Forbidden</servlet-name>
+        <servlet-class>oracle.dbtools.entrypoint.Forbidden</servlet-class>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>Forbidden</servlet-name>
+        <url-pattern>/oracle/dbtools/jarcl</url-pattern>
+    </servlet-mapping>
+
+    <welcome-file-list>
+        <welcome-file>index.html</welcome-file>
+        <welcome-file>index.htm</welcome-file>
+        <welcome-file>index.jsp</welcome-file>
+        <welcome-file>default.html</welcome-file>
+        <welcome-file>default.htm</welcome-file>
+        <welcome-file>default.jsp</welcome-file>
+    </welcome-file-list>
+
+  <!-- Disable auto-discovery of servlet 3+ web fragments -->
+  <absolute-ordering />
+
+  <security-constraint>
+       <web-resource-collection>
+           <web-resource-name>ords</web-resource-name>
+           <url-pattern>/*</url-pattern>
+       </web-resource-collection>
+       <user-data-constraint>
+           <transport-guarantee>CONFIDENTIAL</transport-guarantee>
+       </user-data-constraint>
+  </security-constraint>
+
+</web-app>

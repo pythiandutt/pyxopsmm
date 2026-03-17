@@ -1,0 +1,14 @@
+---
+- name: Add the Oracle repo containing ORDS
+  yum_repository:
+    name: oracle-software
+    description: "Allows installation of additional Oracle software via dnf"
+    baseurl: "{{ ords_repo }}"
+
+- name: Install ORDS related packages
+  dnf:
+    name: "{{ ords_package }}"
+    state: present
+    enablerepo: "{{ ords_repo }}"
+    disable_gpg_check: "{{ skip_gpg_check }}"
+    lock_timeout: "{{ dnf_lock_timeout }}"

@@ -1,0 +1,14 @@
+---
+- name: Validate OS family and version
+  assert:
+    that:
+      - "ansible_os_family == os_family_supported"
+      - "ansible_distribution_version is version_compare(os_min_supported_version, '>=')"
+
+- name: Validate architecture
+  assert:
+    that: "ansible_architecture == '{{ os_supported_architecture }}'"
+
+- name: Validate that target has at least 2.5GB of memory
+  assert:
+    that: ansible_memtotal_mb >= {{ minimum_memory_mb }}

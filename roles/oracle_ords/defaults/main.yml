@@ -1,0 +1,11 @@
+---
+ords_repo: "http://yum.oracle.com/repo/OracleLinux/OL{{ ansible_distribution_major_version }}/oracle/software/$basearch"
+ords_package: ords
+ords_install_admin_user: ords_install_user
+ords_tbsp: APEX
+
+ords_db_users:
+  - { user_name: "{{ ords_install_admin_user }}" , profile_name: "{{ apex_profile }}" , default_tbsp: "{{ ords_tbsp }}" , temp_tbsp: '' , status: 'ACCOUNT LOCK'   , auth_type: '' , state: present }
+  - { user_name: ORDS_PUBLIC_USER                , profile_name: "{{ apex_profile }}" , default_tbsp: "{{ ords_tbsp }}" , temp_tbsp: '' , status: 'ACCOUNT UNLOCK' , auth_type: '' , state: present }
+
+skip_gpg_check: "{% if ansible_distribution == 'OracleLinux' %}false{% else %}true{% endif %}"

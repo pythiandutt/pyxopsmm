@@ -1,0 +1,85 @@
+---
+- name: Add Oracle directory objects
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_directory_object.yml"
+  vars:
+    passed_list: "{{ ora_db_directory_objects | default([]) | unique }}"
+  when: ora_db_directory_objects is defined
+
+- name: Add Oracle tablespaces
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_tablespace.yml"
+  vars:
+    container_name: "{{ oracle_pdb_name }}"
+    passed_list: "{{ ora_db_tablespaces | default([]) | unique }}"
+  when: ora_db_tablespaces is defined
+
+- name: Add Oracle profiles
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_profile.yml"
+  vars:
+    passed_list: "{{ ora_db_profiles | default([]) | unique }}"
+  when: ora_db_profiles is defined
+
+- name: Add Oracle profile limits
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_profile_limit.yml"
+  vars:
+    passed_list: "{{ ora_db_profile_limits | default([]) | unique }}"
+  when: ora_db_profile_limits is defined
+
+- name: Add Oracle users
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_user.yml"
+  vars:
+    passed_list: "{{ ora_db_users | default([]) | unique }}"
+  when: ora_db_users is defined
+
+- name: Add Oracle user properties
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_user_property.yml"
+  vars:
+    passed_list: "{{ ora_db_users | default([]) | unique }}"
+  when: ora_db_users is defined
+
+- name: Add Oracle tablespace quotas
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_quota.yml"
+  vars:
+    passed_list: "{{ ora_db_quotas | default([]) | unique }}"
+  when: ora_db_quotas is defined
+
+- name: Add Oracle roles
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_role.yml"
+  vars:
+    passed_list: "{{ ora_db_roles | default([]) | unique }}"
+  when: ora_db_roles is defined
+
+- name: Add Oracle role privileges
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_role_priv.yml"
+  vars:
+    passed_list: "{{ ora_db_role_privs | default([]) | unique }}"
+  when: ora_db_role_privs is defined
+
+- name: Add Oracle system privileges
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_system_priv.yml"
+  vars:
+    passed_list: "{{ ora_db_system_privs | default([]) | unique }}"
+  when: ora_db_system_privs is defined
+
+- name: Add Oracle object privileges
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_object_priv.yml"
+  vars:
+    passed_list: "{{ ora_db_object_privs | default([]) | unique }}"
+  when: ora_db_object_privs is defined
+
+- name: Add Oracle schema privileges
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_schema_priv.yml"
+  vars:
+    passed_list: "{{ ora_db_schema_privs | default([]) | unique }}"
+  when: ora_db_schema_privs is defined
+
+- name: Add Oracle proxy privileges
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_proxy_priv.yml"
+  vars:
+    passed_list: "{{ ora_db_proxy_privs | default([]) | unique }}"
+  when: ora_db_proxy_privs is defined
+
+- name: Add Oracle network ACLs
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_network_acl.yml"
+  vars:
+    passed_list: "{{ ora_db_network_acls | default([]) | unique }}"
+  when: ora_db_network_acls is defined

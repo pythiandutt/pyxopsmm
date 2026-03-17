@@ -1,0 +1,14 @@
+# For nginx restart 
+- name: Restart nginx
+  listen: restart_nginx
+  become: true
+  become_user: root
+  service:
+    name: nginx.service
+    state: restarted
+
+- name: Wait for Nginx to restart
+  listen: restart_nginx
+  wait_for:
+    port: "{{ nginx_https_port }}"
+    delay: "{{ nginx_restart_delay }}"

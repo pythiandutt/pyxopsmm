@@ -1,0 +1,11 @@
+---
+- name: Install and configure Grafana
+  hosts: all
+  become: true
+  become_user: root
+  tasks:
+    - include_vars: ./vault.yml
+    - name: Install and Configure Grafana on the host server
+      include_role:
+        name: grafana
+        tasks_from: main.yml

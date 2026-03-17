@@ -1,0 +1,20 @@
+---
+- name: Configure the interactive shell in .bash_profile
+  blockinfile:
+    path: "~{{ oracle_user }}/.bash_profile"
+    block: "{{ lookup('template', 'bash_profile.j2') }}"
+    marker: "# {mark} oracle-database-23-free ANSIBLE MANAGED BLOCK"
+    create: true
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_install_group }}"
+    mode: "u=rw,g=r,o="
+
+- name: Configure non-interactive shell in .bashrc
+  blockinfile:
+    path: "~{{ oracle_user }}/.bashrc"
+    block: "{{ lookup('template', 'bashrc.j2') }}"
+    marker: "# {mark} oracle-database-23-free ANSIBLE MANAGED BLOCK"
+    create: true
+    owner: "{{ oracle_user }}"
+    group: "{{ oracle_install_group }}"
+    mode: "u=rw,g=r,o="

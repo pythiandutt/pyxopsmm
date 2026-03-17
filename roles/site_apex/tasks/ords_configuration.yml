@@ -1,0 +1,35 @@
+---
+- name: Revoke certain ORDS grants (security enhancement)
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ora_db_object_priv.yml"
+  vars:
+    passed_list: "{{ ords_db_object_privs | default([]) | unique }}"
+
+- name: Check ORDS configuration parameters
+  shell: |
+    set -o pipefail
+    (ords --config {{ ords_config_dir }} config get {{ item.param_name }} || true) | tail -1
+  environment:
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin"
+  become: true
+  become_user: root
+  changed_when: false
+  register: check_ords_parameters
+  loop: "{{ ords_parameters | default([]) | unique }}"
+
+- name: Adjust ORDS configuration parameters
+  shell: |
+    set -o pipefail
+    ords --config {{ ords_config_dir }} config set {{ item.cfg.param_name }} {{ item.cfg.param_value }}
+  environment:
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/root/bin"
+  become: true
+  become_user: root
+  register: ords_config
+  when: item.param_set != item.cfg.param_value | lower
+  loop: "{{ check_ords_parameters | json_query('results[*].{cfg:item,param_set:stdout}') }}"
+  notify: restart_tomcat
+
+- name: REST enable required schemas
+  include_tasks: "{{ playbook_dir }}/roles/common/tasks/ords_rest_schema.yml"
+  vars:
+    passed_list: "{{ ords_db_rest_enabled_schemas | default([]) | unique }}"

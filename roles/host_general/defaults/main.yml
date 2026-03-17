@@ -1,0 +1,30 @@
+---
+selinux_policy: targeted
+selinux_state: permissive
+
+minimum_memory_mb: 2560
+
+base_packages:
+  - bind-utils
+  - bzip2
+  - chrony
+  - firewalld
+  - gcc
+  - git
+  - gzip
+  - hostname
+  - iotop
+  - iproute
+  - make
+  - net-tools
+  - NetworkManager
+  - procps-ng
+  - python3
+  - sysstat
+  - tar
+  - tree
+  - unzip
+  - util-linux
+  - vim
+  - wget
+  - zip

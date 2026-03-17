@@ -1,0 +1,20 @@
+---
+- name: Deploy prometheus datasource provisioning file
+  template:
+    src: prometheus_datasource.yml.j2
+    dest: "{{ grafana_install_dir }}/{{ grafana_provisioning_dir }}/datasources/prometheus.yml"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: "0640"
+  become: true
+  notify: Restart grafana
+
+- name: Deploy clickhouse datasource provisioning file
+  template:
+    src: clickhouse_datasource.yml.j2
+    dest: "{{ grafana_install_dir }}/{{ grafana_provisioning_dir }}/datasources/clickhouse.yml"
+    owner: "{{ grafana_user }}"
+    group: "{{ grafana_group }}"
+    mode: "0640"
+  become: true
+  notify: Restart grafana

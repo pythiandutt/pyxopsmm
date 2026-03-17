@@ -1,0 +1,20 @@
+---
+- name: Add Oracle OS groups
+  group:
+    name: "{{ item.group }}"
+    gid: "{{ item.gid }}"
+    state: present
+  loop: "{{ oracle_groups }}"
+
+- name: Add Oracle OS user
+  user:
+    name: "{{ oracle_user }}"
+    uid: "{{ oracle_uid }}"
+    group: "{{ oracle_gid }}"
+
+- name: Additional groups to the Oracle OS user
+  user:
+    name: "{{ oracle_user }}"
+    groups: "{{ item.group }}"
+    append: true
+  loop: "{{ oracle_groups }}"

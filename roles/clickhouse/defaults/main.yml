@@ -1,0 +1,8 @@
+# Clickhouse default variables
+clickhouse_user: "clickhouse"
+clickhouse_group: "clickhouse"
+clickhouse_version: "25.8.16.34" # Latest LTS version as of Feb 2027
+clickhouse_base_dir: "/u01/{{ clickhouse_user }}"
+clickhouse_data_dir: "{{ clickhouse_base_dir }}/data"
+clickhouse_log_dir: "{{ clickhouse_base_dir }}/log"
+clickhouse_tmp_dir: "{{ clickhouse_base_dir }}/tmp"

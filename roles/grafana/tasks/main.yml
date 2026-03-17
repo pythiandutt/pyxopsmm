@@ -1,0 +1,31 @@
+---
+# Install Grafana
+- name: Install Grafana
+  include_tasks: install_grafana.yml
+
+- name: Ensure grafana service is started and enabled
+  systemd:
+    name: grafana.service
+    state: started
+    enabled: yes
+    daemon_reload: true
+
+- name: Restart nginx
+  systemd:
+    name: nginx
+    state: restarted
+
+- name: Wait for Grafana to be ready
+  ansible.builtin.uri:
+    url: "http://localhost:{{ grafana_http_port }}/api/health"
+    status_code: 200
+  register: grafana_health
+  until: grafana_health.status == 200
+  retries: 15
+  delay: 3
+
+- name: Install required Grafana plugins
+  include_tasks: install_plugins.yml
+  
+- name: Provision Grafana datasources
+  include_tasks: install_datasources.yml

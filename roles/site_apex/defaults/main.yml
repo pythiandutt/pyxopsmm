@@ -1,0 +1,58 @@
+---
+workspace_user: ''
+
+ora_db_users:
+  - { user_name: "{{ apex_schema.stdout }}" , profile_name: '' , default_tbsp: "{{ apex_tbsp }}" , temp_tbsp: '' , status: "ACCOUNT LOCK" , auth_type: "NO AUTHENTICATION" , state: present }
+
+#ora_db_quotas: []
+
+#ora_db_roles: []
+
+#ora_db_role_privs: []
+
+#ora_db_system_privs: []
+
+#apex_workspaces: []
+
+#apex_users: []
+
+apex_network_acls:
+  - { host: "{{ smtp_server }}" , lower_port: "{{ smtp_port }}" , upper_port: "{{ smtp_port }}" , principal: "{{ apex_schema.stdout }}" , privilege: smtp , state: present }
+
+#apex_workspace_parameters: []
+
+apex_instance_base_parameters:
+  - { param_name: "BIGFILE_TABLESPACES_ENABLED"             , param_value: "Y" }
+  - { param_name: "CHECK_FOR_UPDATES"                       , param_value: "N" }
+  - { param_name: "ENABLE_TRANSACTIONAL_SQL"                , param_value: "Y" }
+  - { param_name: "INSTANCE_TABLESPACE"                     , param_value: "{{ apex_tbsp }}" }
+  - { param_name: "MAX_WEBSERVICE_REQUESTS"                 , param_value: "NULL" }
+  - { param_name: "REQUIRE_HTTPS"                           , param_value: "A" }
+  - { param_name: "SESSION_TIMEOUT_WARNING_SEC"             , param_value: "900" }
+  - { param_name: "SMTP_FROM"                               , param_value: "{{ smtp_sender_apex }}@{{ smtp_sender_domain }}" }
+  - { param_name: "SMTP_HOST_ADDRESS"                       , param_value: "{{ smtp_server }}" }
+  - { param_name: "SMTP_HOST_PORT"                          , param_value: "{{ smtp_port }}" }
+# - { param_name: "SYSTEM_HELP_URL"                         , param_value: "https://apex.oracle.com/doc241" }
+
+apex_database_actions_parameters:
+  - { param_name: "ALLOW_SQL_DEVELOPER_WEB"    , param_value: "Y" }
+
+apex_instance_parameters: "{{ apex_instance_base_parameters + apex_database_actions_parameters if database_actions else apex_instance_base_parameters }}"
+
+ords_base_parameters:
+  - { param_name: "debug.printDebugToScreen"           , param_value: "true" }
+  - { param_name: "misc.defaultPage"                   , param_value: "apex" }
+  - { param_name: "security.requestValidationFunction" , param_value: "wwv_flow_epg_include_modules.authorize" }
+
+ords_database_actions_parameters:
+  - { param_name: "restEnabledSql.active"              , param_value: "true" }
+  - { param_name: "database.api.enabled"               , param_value: "true" }
+  - { param_name: "feature.sdw"                        , param_value: "true" }
+
+ords_parameters: "{{ ords_base_parameters + ords_database_actions_parameters if database_actions else ords_base_parameters }}"
+
+ords_db_object_privs:
+  - { ords: { type: '' , owner: "ords_metadata" , priv: "EXECUTE" , grantee: "public" , state: absent } }
+
+ords_db_rest_enabled_schemas:
+  - { user_name: "{{ main_user }}" , mapping_pattern: "{{ main_user }}" , mapping_type: "BASE_PATH" , auto_rest_auth: "true" , enabled: "true" , state: present }

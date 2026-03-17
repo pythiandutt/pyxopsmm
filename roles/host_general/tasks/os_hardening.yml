@@ -1,0 +1,71 @@
+---
+- name: Disable root login over SSH
+  lineinfile:
+    path: "/etc/ssh/sshd_config"
+    regexp: "^PermitRootLogin"
+    line: "PermitRootLogin no"
+    state: present
+  notify: restart_ssh
+
+- name: Set SELinux state
+  selinux:
+    policy: "{{ selinux_policy }}"
+    state: "{{ selinux_state }}"
+  notify: reboot_server
+
+- name: Run SELinux GRUB adjustments tasks for EL 9 and above
+  when: ansible_distribution_major_version | int > 8
+  block:
+    - name: Check if system is using BLS boot entries
+      command: grubby --info=ALL
+      register: grubby_info
+      changed_when: false
+      failed_when: false
+
+    - name: Determine if BLS is enabled in GRUB
+      shell: "grep -q '^GRUB_ENABLE_BLSCFG=true' /etc/default/grub"
+      register: bls_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Remove selinux=0 and enforcing=0 from grubby-managed kernels (UEK or non-BLS)
+      command: grubby --update-kernel=ALL --remove-args="selinux=0 enforcing=0"
+      when: "'UEK' in grubby_info.stdout | upper or bls_enabled.rc != 0"
+      register: grubby_updated
+      notify: reboot_server
+
+    - name: Remove selinux=0 and enforcing=0 from BLS entries (RHEL-style systems)
+      replace:
+        path: "{{ item }}"
+        regexp: '\b(selinux|enforcing)=0\b'
+        replace: ""
+      with_fileglob:
+        - /boot/loader/entries/*.conf
+      when: bls_enabled.rc == 0
+      register: grubby_updated
+      notify: reboot_server
+
+    - name: Remove selinux=0 from GRUB config if present
+      replace:
+        path: /etc/default/grub
+        regexp: "selinux=0"
+        replace: ""
+      register: updated_grub_cfg
+      notify: reboot_server
+
+    - name: Ensure GRUB is rebuilt (BIOS)
+      command: grub2-mkconfig -o /boot/grub2/grub.cfg
+      when:
+        - updated_grub_cfg.changed or grubby_updated.changed
+        - ansible_facts['firmware'] == 'bios'
+      notify: reboot_server
+
+    - name: Ensure GRUB is rebuilt (UEFI)
+      command: grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg
+      when:
+        - updated_grub_cfg.changed or grubby_updated.changed
+        - ansible_facts['firmware'] == 'efi'
+      notify: reboot_server
+
+- name: Flush handlers after OS hardening tasks
+  meta: flush_handlers

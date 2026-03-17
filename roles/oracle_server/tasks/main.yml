@@ -1,0 +1,12 @@
+---
+- name: Configure the /etc/hosts file
+  import_tasks: hosts_file.yml
+
+- name: Add OS groups and users for Oracle Database
+  import_tasks: db_os_users.yml
+
+- name: Configure the Linux firewalld service for Oracle Database
+  import_tasks: database_firewall.yml
+
+- name: Set Linux HugePages and disable Transparent HugePages
+  import_tasks: hugepages.yml

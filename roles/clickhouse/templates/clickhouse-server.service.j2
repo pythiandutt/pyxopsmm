@@ -1,0 +1,13 @@
+[Unit]
+Description=ClickHouse server
+After=network.target
+
+[Service]
+Type=simple
+User={{ clickhouse_user }}
+Group={{ clickhouse_group }}
+ExecStart={{ clickhouse_base_dir }}/usr/bin/clickhouse-server --config-file={{ clickhouse_base_dir }}/etc/clickhouse-server/config.xml
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

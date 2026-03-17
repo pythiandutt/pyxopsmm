@@ -1,0 +1,14 @@
+---
+etc_hosts_ip: "{% if 'virtualbox' in ansible_virtualization_type %}{{ ansible_all_ipv4_addresses[0] }}{% else %}{{ ansible_default_ipv4.address }}{%endif %}"
+
+oracle_uid: 54321
+oracle_gid: 54321
+
+oracle_groups:
+  - { group: oinstall , gid: "{{ oracle_gid }}" }
+  - { group: dba      , gid: 54322 }
+  - { group: oper     , gid: 54323 }
+  - { group: backupdba, gid: 54324 }
+  - { group: dgdba    , gid: 54325 }
+  - { group: kmdba    , gid: 54326 }
+  - { group: racdba   , gid: 54330 }

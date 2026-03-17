@@ -1,0 +1,20 @@
+---
+- name: Server steps run as "oracle"
+  hosts: all
+  gather_facts: false
+  become: true
+  become_user: "{{ oracle_user }}"
+  tasks:
+    - name: Verify that "main_user" extra variable is provided
+      fail:
+        msg: main_user variable not provided
+      when: main_user is undefined
+
+    - name: Common application/utility related roles
+      include_role:
+        name: "{{ role_list }}"
+      loop:
+        - "logger"
+        - "utplsql"
+      loop_control:
+        loop_var: role_list

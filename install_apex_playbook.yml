@@ -1,0 +1,25 @@
+---
+- name: Server steps run as "root"
+  hosts: all
+  gather_facts: true
+  become: true
+  become_user: root
+  tasks:
+    - name: Verify that "main_user" extra variable is provided
+      fail:
+        msg: main_user variable not provided
+      when: main_user is undefined
+
+    - name: Call Oracle APEX main installation role
+      include_role:
+        name: "oracle_apex"
+
+    - name: Call Tomcat webserver installation role
+      include_role:
+        name: "tomcat_webserver"
+      when: webserver_install | bool
+
+    - name: Call ORDS installation role
+      include_role:
+        name: "oracle_ords"
+      when: ords_install | bool

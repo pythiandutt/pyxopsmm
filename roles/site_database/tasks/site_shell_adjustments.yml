@@ -1,0 +1,16 @@
+---
+- name: Copy aliases into .bash_aliases
+  blockinfile:
+    path: "{{ ansible_env.HOME }}/.bash_aliases"
+    block: "{{ lookup('file', 'bash_aliases') }}"
+    marker: "# {mark} oracle-database-23-free ANSIBLE MANAGED BLOCK"
+    create: true
+    owner: "{{ ansible_user_uid }}"
+    group: "{{ ansible_user_gid }}"
+    mode: "u=rw,g=r,o="
+
+- name: Ensure that .bash_aliases is sourced from .bashrc
+  lineinfile:
+    path: "{{ ansible_env.HOME }}/.bashrc"
+    line: "if [ -f {{ ansible_env.HOME }}/.bash_aliases ]; then source {{ ansible_env.HOME }}/.bash_aliases; fi"
+    state: present

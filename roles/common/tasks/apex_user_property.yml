@@ -1,0 +1,68 @@
+---
+- name: Check APEX user property
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    exec APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(p_workspace=>'{{ item.workspace_name }}'));
+    SELECT NVL(MAX(true),false)
+      FROM wwv_flow_users u, apex_workspace_apex_users a
+     WHERE u.user_name = a.user_name COLLATE binary_ci
+       AND a.workspace_name = '{{ item.workspace_name }}' COLLATE binary_ci
+       AND u.user_name = '{{ item.user_name }}' COLLATE binary_ci
+       AND a.is_admin = DECODE('{{ item.apex_role | upper }}','ADMIN','Yes','No') COLLATE binary_ci
+       AND a.is_application_developer = DECODE('{{ item.apex_role | upper }}','ADMIN','Yes','EDIT','Yes','No') COLLATE binary_ci
+       AND u.email_address = '{{ item.user_email }}' COLLATE binary_ci
+       AND (   NVL(u.default_schema,true) = NVL('{{ item.default_schema }}',true) COLLATE binary_ci
+            OR u.default_schema LIKE 'APEX_2_____'
+           )
+       AND u.default_date_format = '{{ item.default_date_format }}' COLLATE binary_ci;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_apex_user
+  loop: "{{ passed_list }}"
+  loop_control:
+    label: "{{ item.workspace_name }},{{ item.user_name }},{{ item.user_email }},{{ item.apex_role }},{{ item.default_schema }},{{ item.default_date_format }}"
+
+- name: Alter APEX user property
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(p_workspace=>'{{ item.wksp.workspace_name }}'));
+       APEX_UTIL.edit_user(
+          p_user_id => APEX_UTIL.get_user_id(p_username=>'{{ item.wksp.user_name }}'),
+          p_user_name => '{{ item.wksp.user_name }}',
+          p_email_address => '{{ item.wksp.user_email }}',
+          p_developer_roles => '{{ item.wksp.apex_role }}',
+          p_default_schema => '{{ item.wksp.default_schema }}',
+          p_default_date_format => '{{ item.wksp.default_date_format }}'
+       );
+      commit;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  when:
+    - item.wksp.state | lower == "present"
+    - item.property_set is search("FALSE")
+  loop: "{{ check_apex_user | json_query('results[*].{wksp:item,property_set:stdout}') }}"
+  loop_control:
+    label: "{{ item.wksp.workspace_name }},{{ item.wksp.user_name }},{{ item.wksp.user_email }},{{ item.wksp.apex_role }},{{ item.wksp.default_schema }},{{ item.wksp.default_date_format }}"

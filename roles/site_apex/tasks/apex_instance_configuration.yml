@@ -1,0 +1,43 @@
+---
+- name: Check APEX instance-level configuration parameters
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    SET heading off pages 0
+    SELECT NVL(MAX(true),false)
+     WHERE apex_instance_admin.get_parameter('{{ item.param_name }}') = '{{ item.param_value }}'
+        OR DECODE('{{ item.param_value }}','NULL',apex_instance_admin.get_parameter('{{ item.param_name }}'),'x') IS NULL;
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  changed_when: false
+  register: check_apex_instance_parameters
+  loop: "{{ apex_instance_parameters }}"
+
+- name: Set APEX instance-level configuration parameters
+  shell: |
+    set -o pipefail
+    source oraenv <<< {{ oracle_sid }} 1>/dev/null
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    BEGIN
+       IF UPPER('{{ item.param.param_value }}') = 'NULL' THEN
+          apex_instance_admin.set_parameter('{{ item.param.param_name }}',null);
+       ELSE
+          apex_instance_admin.set_parameter('{{ item.param.param_name }}','{{ item.param.param_value }}');
+       END IF;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  when: not item.param_set | bool
+  loop: "{{ check_apex_instance_parameters | json_query('results[*].{param:item,param_set:stdout}') }}"
