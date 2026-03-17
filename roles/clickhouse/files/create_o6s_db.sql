@@ -1,0 +1,1 @@
+create database o6s;

@@ -89,3 +89,6 @@
     state: started
     enabled: yes
     daemon_reload: yes
+
+- name: Create o6s Database and required tables
+  include_tasks: create_o6s_db.yml

@@ -1,0 +1,38 @@
+- name: Copy SQL files to ClickHouse server
+  copy:
+    src: "{{ item }}"
+    dest: "{{ clickhouse_base_dir }}/tmp"
+  with_items:
+    - "create_o6s_db.sql"
+    - "create_o6s_metrics.sql"
+    - "create_o6s_metrics_hourly.sql"
+    - "create_o6s_mv_metrics_hourly.sql"
+    - "create_o6s_alerts.sql"
+    - "create_o6s_alerts_hourly.sql"
+    - "create_o6s_alerts_daily.sql"
+    - "create_o6s_mv_alerts_hourly.sql"
+    - "create_o6s_mv_alerts_daily.sql"
+  become: true
+  become_user: "{{ clickhouse_user }}"
+
+- name: Create o6s Database and required tables
+  shell: |
+    {{ clickhouse_base_dir }}/usr/bin/clickhouse-client \
+    --host localhost \
+    --port 9000 \
+    --user {{ ch_ds_auth_user }} \
+    --password {{ ch_ds_auth_pass }} < {{ item }}
+  with_items:
+    - "{{ clickhouse_base_dir }}/tmp/create_o6s_db.sql"
+    - "{{ clickhouse_base_dir }}/tmp/create_o6s_metrics.sql"
+    - "{{ clickhouse_base_dir }}/tmp/create_o6s_metrics_hourly.sql"
+    - "{{ clickhouse_base_dir }}/tmp/create_o6s_mv_metrics_hourly.sql"
+    - "{{ clickhouse_base_dir }}/tmp/create_o6s_alerts.sql"
+    - "{{ clickhouse_base_dir }}/tmp/create_o6s_alerts_hourly.sql"
+    - "{{ clickhouse_base_dir }}/tmp/create_o6s_alerts_daily.sql"
+    - "{{ clickhouse_base_dir }}/tmp/create_o6s_mv_alerts_hourly.sql"
+    - "{{ clickhouse_base_dir }}/tmp/create_o6s_mv_alerts_daily.sql"
+  become: true
+  become_user: "{{ clickhouse_user }}"
+  args:
+    executable: /bin/bash 
