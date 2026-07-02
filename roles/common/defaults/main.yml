@@ -33,13 +33,13 @@ reboot_timeout: 180
 run_reboot_handler: false
 
 server_timezone: America/Edmonton
-smtp_port: 25
-smtp_server: relay.domain.com
-smtp_sender_domain: domain.com
-smtp_recipient_domain: domain.com
-smtp_sender_db: "{{ ansible_hostname }}-DB"
-smtp_sender_apex: "{{ ansible_hostname }}-APEX"
+smtp_port: 587
+smtp_server: smtp.pythian.com
+smtp_sender_domain: pythian.com
+smtp_recipient_domain: smtp.pythian.com
+smtp_sender_db: "pyxopsmm"
+smtp_sender_apex: "pyxopsmm"
 
-main_user_email: "{{ main_user }}@{{ smtp_recipient_domain }}"
-notification_user_email: pane@pythian.com
+main_user_email: pyxopsmm@pythian.com
+notification_user_email: pyxopsmm@pythian.com
 send_notification_email: false

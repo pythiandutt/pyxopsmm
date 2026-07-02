@@ -1,1 +1,1 @@
-create database o6s;
+create database if not exists o6s;

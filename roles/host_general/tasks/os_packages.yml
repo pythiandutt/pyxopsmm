@@ -6,5 +6,4 @@
     lock_timeout: "{{ dnf_lock_timeout }}"
 
 - name: Set timezone
-  timezone:
-    name: "{{ server_timezone }}"
+  command: timedatectl set-timezone {{ server_timezone }}

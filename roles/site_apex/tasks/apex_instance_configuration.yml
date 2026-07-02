@@ -2,35 +2,38 @@
 - name: Check APEX instance-level configuration parameters
   shell: |
     set -o pipefail
-    source oraenv <<< {{ oracle_sid }} 1>/dev/null
     {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    SET heading off pages 0 feedback off serveroutput on
     WHENEVER SQLERROR EXIT SQL.SQLCODE
-    SET heading off pages 0
-    SELECT NVL(MAX(true),false)
-     WHERE apex_instance_admin.get_parameter('{{ item.param_name }}') = '{{ item.param_value }}'
-        OR DECODE('{{ item.param_value }}','NULL',apex_instance_admin.get_parameter('{{ item.param_name }}'),'x') IS NULL;
-    END_HEREDOC
-  environment:
-    ORACLE_HOME: "{{ oracle_home }}"
-    ORACLE_SID: "{{ oracle_sid }}"
-    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
-    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
-  changed_when: false
-  register: check_apex_instance_parameters
-  loop: "{{ apex_instance_parameters }}"
-
-- name: Set APEX instance-level configuration parameters
-  shell: |
-    set -o pipefail
-    source oraenv <<< {{ oracle_sid }} 1>/dev/null
-    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
-    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    
+    ALTER SESSION SET CONTAINER = {{ oracle_pdb_name | default('APEX') }};
+    
+    DECLARE
+      v_schema VARCHAR2(128);
+      v_val    VARCHAR2(255) := '{{ item.param_value }}';
+      v_actual VARCHAR2(32767);
     BEGIN
-       IF UPPER('{{ item.param.param_value }}') = 'NULL' THEN
-          apex_instance_admin.set_parameter('{{ item.param.param_name }}',null);
-       ELSE
-          apex_instance_admin.set_parameter('{{ item.param.param_name }}','{{ item.param.param_value }}');
-       END IF;
+      -- 1. Locate the correct core APEX engine owner schema name
+      SELECT username INTO v_schema 
+        FROM all_users 
+       WHERE (username LIKE 'APEX_%' OR username = 'APEX_INSTANCE_ADMIN')
+         AND ROWNUM = 1;
+
+      -- 2. Switch context safely
+      EXECUTE IMMEDIATE 'ALTER SESSION SET CURRENT_SCHEMA = ' || v_schema;
+      
+      -- 3. Execute dynamically to bypass early compilation failures
+      EXECUTE IMMEDIATE 'BEGIN :1 := ' || v_schema || '.apex_instance_admin.get_parameter(:2); END;'
+        USING OUT v_actual, '{{ item.param_name }}';
+      
+      IF v_actual = v_val OR (UPPER(v_val) = 'NULL' AND v_actual IS NULL) THEN
+        DBMS_OUTPUT.PUT_LINE('true');
+      ELSE
+        DBMS_OUTPUT.PUT_LINE('false');
+      END IF;
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('false');
     END;
     /
     END_HEREDOC
@@ -39,5 +42,53 @@
     ORACLE_SID: "{{ oracle_sid }}"
     ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
     PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
+  changed_when: false
+  register: check_apex_instance_parameters
+  loop: "{{ apex_instance_parameters }}"
+  loop_control:
+    label: "{{ item.param_name }}"
+
+- name: Set APEX instance-level configuration parameters
+  shell: |
+    set -o pipefail
+    {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    SET heading off pages 0 feedback off serveroutput on
+    WHENEVER SQLERROR EXIT SQL.SQLCODE
+    
+    ALTER SESSION SET CONTAINER = {{ oracle_pdb_name | default('APEX') }};
+    
+    DECLARE
+      v_schema VARCHAR2(128);
+      v_val    VARCHAR2(255) := '{{ item.param.param_value }}';
+    BEGIN
+      -- 1. Find the exact version-specific APEX owner schema name dynamically
+      SELECT username INTO v_schema 
+        FROM all_users 
+       WHERE (username LIKE 'APEX_%' OR username = 'APEX_INSTANCE_ADMIN')
+         AND ROWNUM = 1;
+
+      -- 2. Execute dynamically using the fully qualified schema path prefix
+      IF UPPER(v_val) = 'NULL' THEN
+         EXECUTE IMMEDIATE 'BEGIN ' || v_schema || '.wwv_flow_instance_admin.set_parameter(:1, null); END;'
+           USING '{{ item.param.param_name }}';
+      ELSE
+         EXECUTE IMMEDIATE 'BEGIN ' || v_schema || '.wwv_flow_instance_admin.set_parameter(:1, :2); END;'
+           USING '{{ item.param.param_name }}', v_val;
+      END IF;
+      COMMIT;
+    END;
+    /
+    END_HEREDOC
+  environment:
+    ORACLE_HOME: "{{ oracle_home }}"
+    ORACLE_SID: "{{ oracle_sid }}"
+    ORACLE_PDB_SID: "{{ oracle_pdb_name }}"
+    PATH: "{{ oracle_home }}/bin:/usr/local/bin:/bin:/usr/bin:/usr/local/sbin:/usr/sbin"
+  become: true
+  become_user: "{{ oracle_user }}"
   when: not item.param_set | bool
   loop: "{{ check_apex_instance_parameters | json_query('results[*].{param:item,param_set:stdout}') }}"
+  loop_control:
+    label: "{{ item.param.param_name }}"

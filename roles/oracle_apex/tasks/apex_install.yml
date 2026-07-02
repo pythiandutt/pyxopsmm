@@ -39,12 +39,22 @@
 - name: Check the APEX images location
   shell: |
     set -o pipefail
-    source oraenv <<< {{ oracle_sid }} 1>/dev/null
     {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
-    WHENEVER SQLERROR EXIT SQL.SQLCODE
-    SET heading off pages 0
-    SELECT NVL(MAX(true),false)
-     WHERE apex_instance_admin.get_parameter('IMAGE_PREFIX') = '{{ apex_images_location }}';
+    SET heading off pages 0 feedback off serveroutput on
+
+    ALTER SESSION SET CONTAINER = {{ oracle_pdb_name }};
+
+    DECLARE
+      v_prefix VARCHAR2(255);
+    BEGIN
+      EXECUTE IMMEDIATE 'SELECT sys.apex_instance_admin.get_parameter(''IMAGE_PREFIX'') FROM dual' INTO v_prefix;
+      IF v_prefix = '{{ apex_images_location }}' THEN
+        DBMS_OUTPUT.PUT_LINE('true');
+      ELSE
+        DBMS_OUTPUT.PUT_LINE('false');
+      END_HEREDOC
+      END;
+    /
     END_HEREDOC
   environment:
     ORACLE_HOME: "{{ oracle_home }}"

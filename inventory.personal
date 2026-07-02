@@ -4,6 +4,7 @@ apex_group
 
 #  Role groups:
 [apex_group]
-ol8-ora23aiFree-MBP main_user=spane ansible_host=localhost ansible_port=2223 ansible_user=simon
+#olly-vm-pyxops main_user=ansible ansible_host=10.128.0.29 ansible_user=ansible
+dev-monitoring-vm-pyxops main_user=ansible ansible_host=10.128.15.237 ansible_user=ansible
 
 [reporting_group]

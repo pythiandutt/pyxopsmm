@@ -1,12 +1,12 @@
 ---
-smtp_server: mail.shaw.ca
-smtp_sender_domain: shaw.ca
-smtp_recipient_domain: pythian.com
-smtp_sender_db: "simon.pane.2"
-smtp_sender_apex: "simon.pane.2"
+smtp_server: smtp.mailgun.org # smtp_server for day & ross, to be advised by Prithvi
+smtp_sender_domain: pythian.com # smtp_server for day & ross, to be advised by Prithvi
+smtp_recipient_domain: smtp.pythian.com # smtp_server for day & ross, to be advised by Prithvi
+smtp_sender_db: "pyxopsmm" 
+smtp_sender_apex: "pyxopsmm"
 
-main_user_email: pane@pythian.com
-notification_user_email: pane@pythian.com
+main_user_email: pyxopsmm@pythian.com
+notification_user_email: pyxopsmm@pythian.com
 send_notification_email: false
 
 server_timezone: America/Edmonton

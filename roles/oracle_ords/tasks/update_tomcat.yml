@@ -8,11 +8,28 @@
 - name: Capture numeric APEX version from database
   shell: |
     set -o pipefail
-    source oraenv <<< {{ oracle_sid }} 1>/dev/null
     {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-END_HEREDOC
+    SET heading off pages 0 feedback off serveroutput on
     WHENEVER SQLERROR EXIT SQL.SQLCODE
-    SET heading off pages 0
-    SELECT REPLACE(SUBSTR(version_no,1,4),'.') FROM apex_release;
+    
+    ALTER SESSION SET CONTAINER = {{ oracle_pdb_name | default('APEX') }};
+    
+    DECLARE
+      v_schema  VARCHAR2(128);
+      v_version VARCHAR2(10);
+    BEGIN
+      SELECT username INTO v_schema 
+        FROM all_users 
+       WHERE (username LIKE 'APEX_%' OR username = 'APEX_INSTANCE_ADMIN')
+         AND ROWNUM = 1;
+
+      EXECUTE IMMEDIATE 'ALTER SESSION SET CURRENT_SCHEMA = ' || v_schema;
+      
+      EXECUTE IMMEDIATE 'SELECT REPLACE(SUBSTR(version_no,1,4),''.'') FROM apex_release' INTO v_version;
+      
+      DBMS_OUTPUT.PUT_LINE(v_version);
+    END;
+    /
     END_HEREDOC
   environment:
     ORACLE_HOME: "{{ oracle_home }}"

@@ -37,11 +37,11 @@ grafana_allow_sign_up: false
 grafana_anonymous_enabled: false
 grafana_anonymous_org_role: "Viewer"
 grafana_smtp_enabled: false
-grafana_smtp_host: ""
-grafana_smtp_user: ""
+grafana_smtp_host: "smtp.mailgun.org:587"
+grafana_smtp_user: "pyxopsmm@pythian.com"
 grafana_smtp_password: ""
-grafana_smtp_from_address: "admin@{{ grafana_domain }}"
-grafana_smtp_from_name: "Grafana Admin"
+grafana_smtp_from_address: "pyxopsmm@pythian.com"
+grafana_smtp_from_name: "Pyxops Grafana Admin"
 
 # Database settings (default: sqlite3)
 grafana_database_type: "sqlite3"
@@ -55,7 +55,7 @@ grafana_datasources:
   - name: prometheus
     type: prometheus
     access: proxy
-    url: http://localhost:9090
+    url: http://localhost:9090/prometheus/
     is_default: true
     editable: false
     basic_auth: true

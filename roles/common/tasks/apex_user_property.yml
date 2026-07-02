@@ -2,23 +2,51 @@
 - name: Check APEX user property
   shell: |
     set -o pipefail
-    source oraenv <<< {{ oracle_sid }} 1>/dev/null
     {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    SET heading off pages 0 feedback off serveroutput on
     WHENEVER SQLERROR EXIT SQL.SQLCODE
-    SET heading off pages 0
-    exec APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(p_workspace=>'{{ item.workspace_name }}'));
-    SELECT NVL(MAX(true),false)
-      FROM wwv_flow_users u, apex_workspace_apex_users a
-     WHERE u.user_name = a.user_name COLLATE binary_ci
-       AND a.workspace_name = '{{ item.workspace_name }}' COLLATE binary_ci
-       AND u.user_name = '{{ item.user_name }}' COLLATE binary_ci
-       AND a.is_admin = DECODE('{{ item.apex_role | upper }}','ADMIN','Yes','No') COLLATE binary_ci
-       AND a.is_application_developer = DECODE('{{ item.apex_role | upper }}','ADMIN','Yes','EDIT','Yes','No') COLLATE binary_ci
-       AND u.email_address = '{{ item.user_email }}' COLLATE binary_ci
-       AND (   NVL(u.default_schema,true) = NVL('{{ item.default_schema }}',true) COLLATE binary_ci
-            OR u.default_schema LIKE 'APEX_2_____'
-           )
-       AND u.default_date_format = '{{ item.default_date_format }}' COLLATE binary_ci;
+    
+    ALTER SESSION SET CONTAINER = {{ oracle_pdb_name | default('APEX') }};
+    
+    DECLARE
+      v_schema    VARCHAR2(128);
+      v_prefix    VARCHAR2(10) := 'false';
+      v_workspace VARCHAR2(255) := '{{ item.workspace_name }}';
+      v_username  VARCHAR2(255) := '{{ item.user_name }}';
+      v_role      VARCHAR2(50)  := '{{ item.apex_role | upper }}';
+      v_email     VARCHAR2(255) := '{{ item.user_email }}';
+      v_def_sch   VARCHAR2(128) := '{{ item.default_schema | default("") }}';
+      v_date_fmt  VARCHAR2(50)  := '{{ item.default_date_format }}';
+    BEGIN
+      SELECT username INTO v_schema 
+        FROM all_users 
+       WHERE (username LIKE 'APEX_%' OR username = 'APEX_INSTANCE_ADMIN')
+         AND ROWNUM = 1;
+
+      EXECUTE IMMEDIATE 'ALTER SESSION SET CURRENT_SCHEMA = ' || v_schema;
+      
+      EXECUTE IMMEDIATE 'BEGIN APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(:1)); END;' 
+        USING v_workspace;
+        
+      EXECUTE IMMEDIATE 'SELECT NVL(MAX(''true''), ''false'')
+                           FROM wwv_flow_users u, apex_workspace_apex_users a
+                          WHERE u.user_name = a.user_name COLLATE binary_ci
+                            AND a.workspace_name = :1 COLLATE binary_ci
+                            AND u.user_name = :2 COLLATE binary_ci
+                            AND a.is_admin = DECODE(:3, ''ADMIN'', ''Yes'', ''No'') COLLATE binary_ci
+                            AND a.is_application_developer = DECODE(:4, ''ADMIN'', ''Yes'', ''EDIT'', ''Yes'', ''No'') COLLATE binary_ci
+                            AND u.email_address = :5 COLLATE binary_ci
+                            AND (NVL(u.default_schema, ''true'') = NVL(:6, ''true'') COLLATE binary_ci OR u.default_schema LIKE ''APEX_2_____'')
+                            AND u.default_date_format = :7 COLLATE binary_ci'
+        INTO v_prefix
+        USING v_workspace, v_username, v_role, v_role, v_email, v_def_sch, v_date_fmt;
+        
+      DBMS_OUTPUT.PUT_LINE(v_prefix);
+    EXCEPTION
+      WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('false');
+    END;
+    /
     END_HEREDOC
   environment:
     ORACLE_HOME: "{{ oracle_home }}"
@@ -36,20 +64,41 @@
 - name: Alter APEX user property
   shell: |
     set -o pipefail
-    source oraenv <<< {{ oracle_sid }} 1>/dev/null
     {{ oracle_home }}/bin/sqlplus -s -L / as sysdba <<-'END_HEREDOC'
+    SET heading off pages 0 feedback off serveroutput on
     WHENEVER SQLERROR EXIT SQL.SQLCODE
+    
+    ALTER SESSION SET CONTAINER = {{ oracle_pdb_name | default('APEX') }};
+    
+    DECLARE
+      v_schema    VARCHAR2(128);
+      v_workspace VARCHAR2(255) := '{{ item.wksp.workspace_name }}';
+      v_username  VARCHAR2(255) := '{{ item.wksp.user_name }}';
+      v_email     VARCHAR2(255) := '{{ item.wksp.user_email }}';
+      v_role      VARCHAR2(50)  := '{{ item.wksp.apex_role }}';
+      v_def_sch   VARCHAR2(128) := '{{ item.wksp.default_schema }}';
+      v_date_fmt  VARCHAR2(50)  := '{{ item.wksp.default_date_format }}';
     BEGIN
-       APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(p_workspace=>'{{ item.wksp.workspace_name }}'));
-       APEX_UTIL.edit_user(
-          p_user_id => APEX_UTIL.get_user_id(p_username=>'{{ item.wksp.user_name }}'),
-          p_user_name => '{{ item.wksp.user_name }}',
-          p_email_address => '{{ item.wksp.user_email }}',
-          p_developer_roles => '{{ item.wksp.apex_role }}',
-          p_default_schema => '{{ item.wksp.default_schema }}',
-          p_default_date_format => '{{ item.wksp.default_date_format }}'
-       );
-      commit;
+      SELECT username INTO v_schema 
+        FROM all_users 
+       WHERE (username LIKE 'APEX_%' OR username = 'APEX_INSTANCE_ADMIN')
+         AND ROWNUM = 1;
+
+      EXECUTE IMMEDIATE 'ALTER SESSION SET CURRENT_SCHEMA = ' || v_schema;
+      
+      EXECUTE IMMEDIATE 'BEGIN 
+                           APEX_UTIL.set_security_group_id(APEX_UTIL.find_security_group_id(:1));
+                           APEX_UTIL.edit_user(
+                             p_user_id             => APEX_UTIL.get_user_id(p_username=>:2),
+                             p_user_name           => :3,
+                             p_email_address       => :4,
+                             p_developer_roles     => :5,
+                             p_default_schema      => :6,
+                             p_default_date_format => :7
+                           );
+                         END;'
+        USING v_workspace, v_username, v_username, v_email, v_role, v_def_sch, v_date_fmt;
+      COMMIT;
     END;
     /
     END_HEREDOC

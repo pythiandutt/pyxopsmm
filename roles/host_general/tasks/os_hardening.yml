@@ -8,9 +8,9 @@
   notify: restart_ssh
 
 - name: Set SELinux state
-  selinux:
-    policy: "{{ selinux_policy }}"
-    state: "{{ selinux_state }}"
+  ansible.posix.selinux:
+    policy: targeted
+    state: permissive
   notify: reboot_server
 
 - name: Run SELinux GRUB adjustments tasks for EL 9 and above

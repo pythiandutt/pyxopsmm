@@ -1,4 +1,13 @@
 ---
+- name: Ensure ORACLE_BASE exists with correct ownership for 26ai
+  file:
+    path: "{{ oracle_base | default('/opt/oracle') }}"
+    state: directory
+    owner: oracle
+    group: oinstall
+    mode: '0755'
+  become: true
+
 - name: Install {{ oracle_db_release }} Free via RPM
   import_tasks: rpm_install.yml
 

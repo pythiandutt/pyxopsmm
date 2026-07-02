@@ -1,8 +1,8 @@
 ---
 - name: Configure memlock limits for Linux HugePages
-  pam_limits:
+  community.general.pam_limits:
     domain: oracle
-    limit_type: "{{ item }}"
+    limit_type: '-'
     limit_item: memlock
     value: unlimited
   loop:
