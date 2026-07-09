@@ -43,3 +43,19 @@
   vars:
     container_name: "{{ oracle_pdb_name }}"
     passed_list: "{{ apex_tablespaces | default([]) | unique }}"
+
+- name: Create the custom DATA tablespace inside the PDB
+  shell: |
+    sqlplus -s / as sysdba <<EOF
+    ALTER SESSION SET CONTAINER = {{ oracle_pdb_name | default('pyxops') }};
+    CREATE TABLESPACE DATA 
+      DATAFILE 'data_01.dbf' SIZE 100M 
+      AUTOEXTEND ON NEXT 50M MAXSIZE UNLIMITED;
+    EXIT;
+    EOF
+  become: true
+  become_user: oracle
+  register: tablespace_creation
+  failed_when: 
+    - tablespace_creation.rc != 0
+    - "'ORA-01543' not in tablespace_creation.stderr and 'ORA-01543' not in tablespace_creation.stdout" # Ignores error if it already exists
