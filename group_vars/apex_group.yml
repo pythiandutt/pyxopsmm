@@ -4,3 +4,4 @@ ords_install: true
 webserver_install: true
 database_actions: true
 oracle_pdb_name: "PYXOPS"
+oracle_pdb_tablespace: "DATA"
